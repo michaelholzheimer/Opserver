@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.DirectoryServices.AccountManagement;
 using System.Linq;
 using System.Security;
+using System.Threading;
 using StackExchange.Profiling;
 
 namespace StackExchange.Opserver.Models.Security
@@ -20,7 +21,7 @@ namespace StackExchange.Opserver.Models.Security
             AuthPassword = settings.AuthPassword;
         }
 
-        private bool UserAuth { get { return AuthUser.HasValue() && AuthPassword.HasValue(); } }
+        private bool UserAuth => AuthUser.HasValue() && AuthPassword.HasValue();
 
         public override bool ValidateUser(string userName, string password)
         {
@@ -35,16 +36,16 @@ namespace StackExchange.Opserver.Models.Security
             return groups.Any(g =>
                                   {
                                       var members = GetGroupMembers(g);
-                                      return members != null && members.Contains(accountName);
+                                      return members != null && members.Contains(accountName, StringComparer.InvariantCultureIgnoreCase);
                                   });
         }
-
+        
         public override void PurgeCache()
         {
             //Current.LocalCache.RemoveAll("AD-Members-*");
         }
 
-        public List<string> GetGroupMembers(string groupName)
+        public override List<string> GetGroupMembers(string groupName)
         {
             return Current.LocalCache.GetSet<List<string>>("ADMembers-" + groupName,
                 (old, ctx) =>
@@ -55,17 +56,15 @@ namespace StackExchange.Opserver.Models.Security
                             {
                                 using (var gp = GroupPrincipal.FindByIdentity(pc, groupName))
                                 {
-                                    return gp == null
-                                               ? new List<string>()
-                                               : gp.GetMembers().ToList().Select(mp => mp.SamAccountName).ToList();
+                                    return gp?.GetMembers(true).ToList().Select(mp => mp.SamAccountName).ToList() ?? new List<string>();
                                 }
                             });
                         return group ?? old ?? new List<string>();
                     }
-                }, 60 * 60, 60 * 60 * 24);
+                }, 5 * 60, 60 * 60 * 24);
         }
 
-        public T RunCommand<T>(Func<PrincipalContext, T> command)
+        public T RunCommand<T>(Func<PrincipalContext, T> command, int retries = 3)
         {
             if (Servers != null && Servers.Any())
             {
@@ -95,7 +94,15 @@ namespace StackExchange.Opserver.Models.Security
                 }
                 catch (Exception ex)
                 {
-                    Current.LogException("Couldn't contact current AD", ex);
+                    if (retries > 0)
+                    {
+                        Thread.Sleep(1000);
+                        RunCommand(command, retries - 1);
+                    }
+                    else
+                    {
+                        Current.LogException("Couldn't contact current AD", ex);
+                    }
                 }
             }
 

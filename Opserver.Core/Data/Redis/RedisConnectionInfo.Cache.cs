@@ -5,10 +5,7 @@ namespace StackExchange.Opserver.Data.Redis
 {
     public partial class RedisConnectionInfo
     {
-        public static List<RedisConnectionInfo> AllConnections
-        {
-            get { return _redisConnectionInfos ?? (_redisConnectionInfos = LoadRedisConnections()); }
-        }
+        public static List<RedisConnectionInfo> AllConnections => _redisConnectionInfos ?? (_redisConnectionInfos = LoadRedisConnections());
 
         private static readonly object _loadLock = new object();
         private static List<RedisConnectionInfo> _redisConnectionInfos;
@@ -23,16 +20,22 @@ namespace StackExchange.Opserver.Data.Redis
                 {
                     var servers = Current.Settings.Redis.Servers;
 
-                    var allServers = Current.Settings.Redis.AllServers;
-                    if (allServers != null && allServers.Instances.Any())
+                    var defaultServerInstances = Current.Settings.Redis.Defaults.Instances;
+                    var allServerInstances = Current.Settings.Redis.AllServers.Instances;
+
+                    foreach (var s in servers)
                     {
-                        var globalInstances = allServers.Instances;
-                        foreach (var s in servers)
-                        {
-                            globalInstances.ForEach(gi => result.Add(new RedisConnectionInfo(s.Name, gi)));
-                            if (s.Instances.Any())
-                                s.Instances.ForEach(i => result.Add(new RedisConnectionInfo(s.Name, i)));
-                        }
+                        var count = result.Count;
+                        // Add instances that belong to any servers
+                        allServerInstances?.ForEach(gi => result.Add(new RedisConnectionInfo(s.Name, gi)));
+
+                        // Add instances defined on this server
+                        if (s.Instances.Any())
+                            s.Instances.ForEach(i => result.Add(new RedisConnectionInfo(s.Name, i)));
+
+                        // If we have no instances added at this point, defaults it is!
+                        if (defaultServerInstances != null && count == result.Count)
+                            defaultServerInstances.ForEach(gi => result.Add(new RedisConnectionInfo(s.Name, gi)));
                     }
                 }
                 return result;

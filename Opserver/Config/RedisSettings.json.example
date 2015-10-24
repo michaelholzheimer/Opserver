@@ -5,7 +5,7 @@
             {
                 "name": "Core (Q&A)",
                 "port": "6379",
-                "Regexes": {
+                "analysisRegexes": {
                     "**local**": "^local-",
                     "**dev**": "^dev-",
                     "**local**": "^local:",
@@ -27,7 +27,7 @@
             {
                 "name": "CoreML (Q&A)",
                 "port": "6383",
-                "Regexes": {
+                "analysisRegexes": {
                     "ltah-home-pred": "^ltah-home-pred-",
                     "ltal-home-pred": "^ltal-home-pred-",
                     "ml-ltap-cache": "^ml-ltap-cache-",
@@ -40,6 +40,11 @@
     "Servers": [
         { "name": "ny-redis01" },
         { "name": "ny-redis02" },
-        { "name": "or-redis01" }
+        { "name": "co-redis01" },
+        { "name": "co-redis02" },
+        {
+          "name": "ny-mlredis01",
+          "instances": [ { "name": "Machine Learning", "port": "6379" } ]
+        }
     ]
 }

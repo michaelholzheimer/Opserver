@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Linq;
-using Dapper;
 
 namespace StackExchange.Opserver.Data.SQL
 {
@@ -14,9 +13,9 @@ namespace StackExchange.Opserver.Data.SQL
                 return _serverProperties ?? (_serverProperties = new Cache<SQLServerProperties>
                     {
                         CacheForSeconds = 60,
-                        UpdateCache = UpdateFromSql("Properties", conn =>
+                        UpdateCache = UpdateFromSql("Properties", async conn =>
                             {
-                                var result = conn.Query<SQLServerProperties>(SQLServerProperties.FetchSQL).FirstOrDefault();
+                                var result = (await conn.QueryAsync<SQLServerProperties>(SQLServerProperties.FetchSQL)).FirstOrDefault();
                                 if (result != null)
                                 {
                                     Version = result.ParsedVersion;
@@ -35,43 +34,40 @@ namespace StackExchange.Opserver.Data.SQL
 
         public class SQLServerProperties
         {
-            public string Version { get; private set; }
-            public string FullVersion { get; private set; }
-            public string Level { get; private set; }
-            public string Edition { get; private set; }
-            public string Collation { get; private set; }
-            public string BuildClrVersion { get; private set; }
-            public string InstanceName { get; private set; }
-            public FullTextInstallStatus? IsFullTextInstalled { get; private set; }
-            public HADREnabledStatus? IsHadrEnabled { get; private set; }
-            public HADRManagerStatus? HadrManagerStatus { get; private set; }
-            public string MachineName { get; private set; }
-            public string ServerName { get; private set; }
-            public int ProcessID { get; private set; }
-            public int SessionCount { get; private set; }
-            public int ConnectionCount { get; private set; }
-            public int JobCount { get; private set; }
-            public int CPUCount { get; private set; }
-            public int HyperthreadRatio { get; private set; }
-            public long PhysicalMemoryBytes { get; private set; }
-            public long VirtualMemoryBytes { get; private set; }
-            public long CommittedBytes { get; private set; }
-            public long CommittedTargetBytes { get; private set; }
-            public long StackSizeBytes { get; private set; }
-            public int CurrentWorkerCount { get; private set; }
-            public int MaxWorkersCount { get; private set; }
-            public int SchedulerCount { get; private set; }
-            public int SchedulerTotalCount { get; private set; }
-            public DateTime SQLServerStartTime { get; private set; }
-            public VirtualMachineTypes VirtualMachineType { get; private set; }
+            public string Version { get; internal set; }
+            public string FullVersion { get; internal set; }
+            public string Level { get; internal set; }
+            public string Edition { get; internal set; }
+            public string Collation { get; internal set; }
+            public string BuildClrVersion { get; internal set; }
+            public string InstanceName { get; internal set; }
+            public FullTextInstallStatus? IsFullTextInstalled { get; internal set; }
+            public HADREnabledStatus? IsHadrEnabled { get; internal set; }
+            public HADRManagerStatus? HadrManagerStatus { get; internal set; }
+            public string MachineName { get; internal set; }
+            public string ServerName { get; internal set; }
+            public int ProcessID { get; internal set; }
+            public int SessionCount { get; internal set; }
+            public int ConnectionCount { get; internal set; }
+            public int JobCount { get; internal set; }
+            public int CPUCount { get; internal set; }
+            public int HyperthreadRatio { get; internal set; }
+            public long PhysicalMemoryBytes { get; internal set; }
+            public long VirtualMemoryBytes { get; internal set; }
+            public long CommittedBytes { get; internal set; }
+            public long CommittedTargetBytes { get; internal set; }
+            public long StackSizeBytes { get; internal set; }
+            public int CurrentWorkerCount { get; internal set; }
+            public int MaxWorkersCount { get; internal set; }
+            public int SchedulerCount { get; internal set; }
+            public int SchedulerTotalCount { get; internal set; }
+            public DateTime SQLServerStartTime { get; internal set; }
+            public VirtualMachineTypes VirtualMachineType { get; internal set; }
 
-            public int CPUSocketCount { get { return CPUCount/HyperthreadRatio; } }
+            public int CPUSocketCount => CPUCount/HyperthreadRatio;
 
             private Version _version;
-            public Version ParsedVersion
-            {
-                get { return _version ?? (_version = Version != null ? System.Version.Parse(Version) : new Version(0, 0)); }
-            }
+            public Version ParsedVersion => _version ?? (_version = Version != null ? System.Version.Parse(Version) : new Version(0, 0));
 
             public string MajorVersion
             {
@@ -91,8 +87,8 @@ namespace StackExchange.Opserver.Data.SQL
                 }
             }
 
-            internal const string FetchSQL = @"
-Declare @sql nvarchar(4000) = '
+            internal const string FetchSQL = @"Declare @sql nvarchar(4000);
+Set @sql = '
 Select Cast(SERVERPROPERTY(''ProductVersion'') as nvarchar(128)) Version,
        @@VERSION FullVersion,
        Cast(SERVERPROPERTY(''ProductLevel'') as nvarchar(128)) Level,
@@ -115,18 +111,22 @@ Select Cast(SERVERPROPERTY(''ProductVersion'') as nvarchar(128)) Version,
        stack_size_in_bytes StackSizeBytes,
        max_workers_count MaxWorkersCount,
        scheduler_count SchedulerCount,
-       scheduler_total_count SchedulerTotalCount,
-       sqlserver_start_time SQLServerStartTime,
-       virtual_machine_type VirtualMachineType,';
+       scheduler_total_count SchedulerTotalCount,'
+       
+If (SELECT @@MICROSOFTVERSION / 0x01000000) >= 10
+	Set @sql = @sql + '
+       sqlserver_start_time SQLServerStartTime,';
 
 If (SELECT @@MICROSOFTVERSION / 0x01000000) >= 11
     Set @sql = @sql + '
+	   virtual_machine_type VirtualMachineType,	  
        Cast(physical_memory_kb as bigint) * 1024 PhysicalMemoryBytes,
        Cast(virtual_memory_kb as bigint) * 1024 VirtualMemoryBytes,
        Cast(committed_kb as bigint) * 1024 CommittedBytes,
        Cast(committed_target_kb as bigint) * 1024 CommittedTargetBytes';
 Else 
     Set @sql = @sql + '
+       null VirtualMachineType,
        physical_memory_in_bytes PhysicalMemoryBytes,
        virtual_memory_in_bytes VirtualMemoryBytes,
        Cast(bpool_committed as bigint) * 8 * 1024 CommittedBytes,

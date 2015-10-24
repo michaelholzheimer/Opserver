@@ -1,23 +1,18 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using Dapper;
 
 namespace StackExchange.Opserver.Data.SQL
 {
     public partial class SQLInstance
     {
         private Cache<List<SQLDatabaseInfo>> _databases;
-        public Cache<List<SQLDatabaseInfo>> Databases
-        {
-            get { return _databases ?? (_databases = SqlCacheList<SQLDatabaseInfo>(5 * 60)); }
-        }
+        public Cache<List<SQLDatabaseInfo>> Databases => _databases ?? (_databases = SqlCacheList<SQLDatabaseInfo>(5 * 60));
 
         private Cache<List<SQLDatabaseBackupInfo>> _databaseBackups;
-        public Cache<List<SQLDatabaseBackupInfo>> DatabaseBackups
-        {
-            get { return _databaseBackups ?? (_databaseBackups = SqlCacheList<SQLDatabaseBackupInfo>(5 * 60)); }
-        }
+        public Cache<List<SQLDatabaseBackupInfo>> DatabaseBackups => _databaseBackups ?? (_databaseBackups = SqlCacheList<SQLDatabaseBackupInfo>(5 * 60));
+
+        private Cache<List<SQLDatabaseFileInfo>> _databaseFiles;
+        public Cache<List<SQLDatabaseFileInfo>> DatabaseFiles => _databaseFiles ?? (_databaseFiles = SqlCacheList<SQLDatabaseFileInfo>(5 * 60));
 
         public Cache<List<SQLDatabaseTableInfo>> GetTableInfo(string databaseName)
         {
@@ -25,11 +20,11 @@ namespace StackExchange.Opserver.Data.SQL
                 {
                     CacheKey = GetCacheKey("TableInfo-" + databaseName),
                     CacheForSeconds = 60,
-                    CacheStaleForSeconds = 5*60,
+                    CacheStaleForSeconds = 5 * 60,
                     UpdateCache = UpdateFromSql("Table Info for " + databaseName, conn =>
                         {
-                            var sql = string.Format("Use [{0}]; {1}", databaseName, GetFetchSQL<SQLDatabaseTableInfo>());
-                            return conn.Query<SQLDatabaseTableInfo>(sql).ToList();
+                            var sql = $"Use [{databaseName}]; {GetFetchSQL<SQLDatabaseTableInfo>()}";
+                            return conn.QueryAsync<SQLDatabaseTableInfo>(sql);
                         })
                 };
         }
@@ -39,21 +34,18 @@ namespace StackExchange.Opserver.Data.SQL
             return new Cache<List<SQLDatabaseColumnInfo>>
             {
                 CacheKey = GetCacheKey("ColumnInfo-" + databaseName),
-                CacheForSeconds = 60,
+                CacheForSeconds = 5 * 60,
                 CacheStaleForSeconds = 30 * 60,
                 UpdateCache = UpdateFromSql("Column Info for " + databaseName, conn =>
                 {
-                    var sql = string.Format("Use [{0}]; {1}", databaseName, GetFetchSQL<SQLDatabaseColumnInfo>());
-                    return conn.Query<SQLDatabaseColumnInfo>(sql).ToList();
+                    var sql = $"Use [{databaseName}]; {GetFetchSQL<SQLDatabaseColumnInfo>()}";
+                    return conn.QueryAsync<SQLDatabaseColumnInfo>(sql);
                 })
             };
         }
 
         private Cache<List<SQLDatabaseVLFInfo>> _databaseVLFs;
-        public Cache<List<SQLDatabaseVLFInfo>> DatabaseVLFs
-        {
-            get { return _databaseVLFs ?? (_databaseVLFs = SqlCacheList<SQLDatabaseVLFInfo>(10 * 60, 60, affectsStatus: false)); }
-        }
+        public Cache<List<SQLDatabaseVLFInfo>> DatabaseVLFs => _databaseVLFs ?? (_databaseVLFs = SqlCacheList<SQLDatabaseVLFInfo>(10 * 60, 60, affectsStatus: false));
 
         public static List<string> SystemDatabaseNames = new List<string>
             {
@@ -65,7 +57,7 @@ namespace StackExchange.Opserver.Data.SQL
 
         public class SQLDatabaseInfo : ISQLVersionedObject, IMonitorStatus
         {
-            public Version MinVersion { get { return SQLServerVersions.SQL2005.RTM; } }
+            public Version MinVersion => SQLServerVersions.SQL2005.RTM;
 
             public string OverallStateDescription
             {
@@ -121,10 +113,7 @@ namespace StackExchange.Opserver.Data.SQL
 
             private bool? _isSystemDatabase;
             public int Id { get; internal set; }
-            public bool IsSystemDatabase
-            {
-                get { return (_isSystemDatabase ?? (_isSystemDatabase = SystemDatabaseNames.Contains(Name))).Value; }
-            }
+            public bool IsSystemDatabase => (_isSystemDatabase ?? (_isSystemDatabase = SystemDatabaseNames.Contains(Name))).Value;
             public string Name { get; internal set; }
             public DatabaseStates State { get; internal set; }
             public CompatabilityLevels CompatbilityLevel { get; internal set; }
@@ -147,7 +136,7 @@ namespace StackExchange.Opserver.Data.SQL
             public double? LogSizeMB { get; internal set; }
             public double? LogSizeUsedMB { get; internal set; }
 
-            public double? LogPercentUsed { get { return LogSizeMB > 0 ? 100*LogSizeUsedMB/LogSizeMB : null; } }
+            public double? LogPercentUsed => LogSizeMB > 0 ? 100 * LogSizeUsedMB / LogSizeMB : null;
 
             internal const string FetchSQL2012Columns = @"
        db.replica_id ReplicaId,
@@ -184,18 +173,18 @@ Select db.database_id Id,
 From sys.databases db
      Left Join sys.dm_os_performance_counters logu On db.name = logu.instance_name And logu.counter_name LIKE N'Log File(s) Used Size (KB)%' 
      Left Join sys.dm_os_performance_counters logs On db.name = logs.instance_name And logs.counter_name LIKE N'Log File(s) Size (KB)%' 
-     Left Join (Select database_id, Sum(size) TotalSize 
+     Left Join (Select database_id, Sum(Cast(size As Bigint)) TotalSize 
                   From sys.master_files 
               Group By database_id) st On db.database_id = st.database_id
-     Left Join (Select database_id, Sum(size) RowSize 
+     Left Join (Select database_id, Sum(Cast(size As Bigint)) RowSize 
                   From sys.master_files 
                  Where type = 0 
               Group By database_id) sr On db.database_id = sr.database_id
-     Left Join (Select database_id, Sum(size) StreamSize 
+     Left Join (Select database_id, Sum(Cast(size As Bigint)) StreamSize 
                   From sys.master_files 
                  Where type = 2
               Group By database_id) ss On db.database_id = ss.database_id
-     Left Join (Select database_id, Sum(size) TextIndexSize 
+     Left Join (Select database_id, Sum(Cast(size As Bigint)) TextIndexSize 
                   From sys.master_files 
                  Where type = 4
               Group By database_id) sti On db.database_id = sti.database_id {1}";
@@ -208,10 +197,10 @@ From sys.databases db
                 return string.Format(FetchSQL, "", "");
             }
         }
-        
+
         public class SQLDatabaseBackupInfo : ISQLVersionedObject
         {
-            public Version MinVersion { get { return SQLServerVersions.SQL2005.RTM; } }
+            public Version MinVersion => SQLServerVersions.SQL2005.RTM;
 
             public int Id { get; internal set; }
             public string Name { get; internal set; }
@@ -294,9 +283,102 @@ Select db.database_id Id,
             }
         }
 
+        public class SQLDatabaseFileInfo : ISQLVersionedObject
+        {
+            public Version MinVersion => SQLServerVersions.SQL2005.RTM;
+
+            public string VolumeId { get; internal set; }
+            public string VolumeMountPoint { get; internal set; }
+            public string LogicalVolumeName { get; internal set; }
+            public int DatabaseId { get; internal set; }
+            public string DatabaseName { get; internal set; }
+            public int FileId { get; internal set; }
+            public string FileName { get; internal set; }
+            public string PhysicalName { get; internal set; }
+            public int DataSpaceId { get; internal set; }
+            public DatabaseFileTypes FileType { get; internal set; }
+            public DatabaseFileStates FileState { get; internal set; }
+            public long FileSizePages { get; internal set; }
+            public long FileMaxSizePages { get; internal set; }
+            public long FileGrowthRaw { get; internal set; }
+            public bool FileIsPercentGrowth { get; internal set; }
+            public bool FileIsReadOnly { get; internal set; }
+            public long StallReadMs { get; internal set; }
+            public long NumReads { get; internal set; }
+            public long StallWriteMs { get; internal set; }
+            public long NumWrites { get; internal set; }
+
+            public double AvgReadStallMs => NumReads == 0 ? 0 : StallReadMs / NumReads;
+            public double AvgWriteStallMs => NumWrites == 0 ? 0 : StallWriteMs / NumWrites;
+            public long FileSizeBytes => FileSizePages*8*1024;
+
+            public string GrowthDescription
+            {
+                get
+                {
+                    if (FileGrowthRaw == 0) return "None";
+
+                    if (FileIsPercentGrowth) return FileGrowthRaw + "%";
+
+                    // Growth that's not percent-based is 8KB pages rounded to the nearest 64KB
+                    return (FileGrowthRaw*8*1024).ToHumanReadableSize();
+                }
+            }
+
+            public string MaxSizeDescription
+            {
+                get
+                {
+                    switch (FileMaxSizePages)
+                    {
+                        case 0:
+                            return "At Max - No Growth";
+                        case -1:
+                            return "No Limit - Disk Capacity";
+                        case 268435456:
+                            return "2 TB";
+                        default:
+                            return (FileMaxSizePages*8*1024).ToHumanReadableSize();
+                    }
+                }
+            }
+
+            internal const string FetchSQL = @"
+Select vs.volume_id VolumeId,
+       vs.volume_mount_point VolumeMountPoint, 
+       vs.logical_volume_name LogicalVolumeName,
+       mf.database_id DatabaseId,
+       DB_Name(mf.database_id) DatabaseName,
+       mf.file_id FileId,
+       mf.name FileName,
+       mf.physical_name PhysicalName,
+       mf.data_space_id DataSpaceId,
+       mf.type FileType,
+       mf.state FileState,
+       mf.size FileSizePages,
+       mf.max_size FileMaxSizePages,
+       mf.growth FileGrowthRaw,
+       mf.is_percent_growth FileIsPercentGrowth,
+       mf.is_read_only FileIsReadOnly,
+       fs.io_stall_read_ms StallReadMs,
+       fs.num_of_reads NumReads,
+       fs.io_stall_write_ms StallWriteMs,
+       fs.num_of_writes NumWrites
+  From sys.dm_io_virtual_file_stats(null, null) fs
+       Join sys.master_files mf 
+         On fs.database_id = mf.database_id
+         And fs.file_id = mf.file_id
+       Cross Apply sys.dm_os_volume_stats(mf.database_id, mf.file_id) vs";
+
+            public string GetFetchSQL(Version v)
+            {
+                return FetchSQL;
+            }
+        }
+
         public class SQLDatabaseTableInfo : ISQLVersionedObject
         {
-            public Version MinVersion { get { return SQLServerVersions.SQL2005.RTM; } }
+            public Version MinVersion => SQLServerVersions.SQL2005.RTM;
 
             public int Id { get; internal set; }
             public string SchemaName { get; internal set; }
@@ -308,7 +390,7 @@ Select db.database_id Id,
             public long IndexTotalSpaceKB { get; internal set; }
             public long UsedSpaceKB { get; internal set; }
             public long TotalSpaceKB { get; internal set; }
-            public long FreeSpaceKB { get { return TotalSpaceKB - UsedSpaceKB; } }
+            public long FreeSpaceKB => TotalSpaceKB - UsedSpaceKB;
             public TableTypes TableType { get; internal set; }
 
             internal const string FetchSQL = @"
@@ -350,41 +432,143 @@ Group By t.object_id, t.Name, t.create_date, s.name";
                 return FetchSQL;
             }
         }
-        
+
         public class SQLDatabaseColumnInfo : ISQLVersionedObject
         {
-            public Version MinVersion { get { return SQLServerVersions.SQL2005.RTM; } }
+            public Version MinVersion => SQLServerVersions.SQL2005.RTM;
 
-            public int Position { get; internal set; }
+            public string Id => Schema + "." + TableName + "." + ColumnName;
+
             public string Schema { get; internal set; }
             public string TableName { get; internal set; }
+            public int Position { get; internal set; }
             public string ColumnName { get; internal set; }
-            public string ColumnDefault { get; internal set; }
-            public bool IsNullable { get; internal set; }
             public string DataType { get; internal set; }
-            public int CharacterMaxLength { get; internal set; }
-            public byte NumericPrecision { get; internal set; }
-            public short NumericPrecisionRadix { get; internal set; }
-            public int NumericScale { get; internal set; }
-            public short DatetimePrecision { get; internal set; }
+            public bool IsNullable { get; internal set; }
+            public int MaxLength { get; internal set; }
+            public byte Scale { get; internal set; }
+            public byte Precision { get; internal set; }
+            public string ColumnDefault { get; internal set; }
             public string CollationName { get; internal set; }
+            public bool IsIdentity { get; internal set; }
+            public bool IsComputed { get; internal set; }
+            public bool IsFileStream { get; internal set; }
+            public bool IsSparse { get; internal set; }
+            public bool IsColumnSet { get; internal set; }
+            public string PrimaryKeyConstraint { get; internal set; }
+            public string ForeignKeyConstraint { get; internal set; }
+            public string ForeignKeyTargetSchema { get; internal set; }
+            public string ForeignKeyTargetTable { get; internal set; }
+            public string ForeignKeyTargetColumn { get; internal set; }
+
+            public string DataTypeDescription
+            {
+                get
+                {
+                    var props = new List<string>();
+                    if (IsSparse) props.Add("sparse");
+                    switch (DataType)
+                    {
+                        case "varchar":
+                        case "nvarchar":
+                        case "varbinary":
+                            props.Add($"{DataType}({(MaxLength == -1 ? "max" : MaxLength.ToString())})");
+                            break;
+                        case "decimal":
+                        case "numeric":
+                            props.Add($"{DataType}({Scale},{Precision})");
+                            break;
+                        default:
+                            props.Add(DataType);
+                            break;
+                    }
+                    props.Add(IsNullable ? "null" : "not null");
+                    return string.Join(", ", props);
+                }
+            }
 
             internal const string FetchSQL = @"
-Select TABLE_SCHEMA [Schema],
-       TABLE_NAME TableName,
-       ORDINAL_POSITION Position,
-       COLUMN_NAME ColumnName,
-       COLUMN_DEFAULT ColumnDefault,
-       Cast(Case IS_NULLABLE When 'YES' Then 1 Else 0 End as BIT) IsNullable,
-       DATA_TYPE DataType,
-       CHARACTER_MAXIMUM_LENGTH CharMaxLength,
-       NUMERIC_PRECISION NumericPrecision,
-       NUMERIC_PRECISION_RADIX NumericPrecisionRadix,
-       NUMERIC_SCALE NumericScale,
-       DATETIME_PRECISION DatetimePrecision,
-       COLLATION_NAME CollationName
-  From INFORMATION_SCHEMA.COLUMNS
-Order By TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION";
+Select s.name [Schema],
+       t.name TableName,
+       c.column_id Position,
+       c.name ColumnName,
+       ty.name DataType,
+       c.is_nullable IsNullable,
+       (Case When ty.name In ('nchar', 'ntext','nvarchar') And c.max_length <> -1 Then c.max_length / 2 Else c.max_length End) MaxLength,
+       c.scale Scale,
+       c.precision Precision,
+       object_definition(c.default_object_id) ColumnDefault,
+       c.collation_name CollationName,
+       c.is_identity IsIdentity,
+       c.is_computed IsComputed,
+       c.is_filestream IsFileStream,
+       c.is_sparse IsSparse,
+       c.is_column_set IsColumnSet,
+       (Select Top 1 i.name
+          From sys.indexes i 
+               Join sys.index_columns ic On i.object_id = ic.object_id And i.index_id = ic.index_id
+         Where i.object_id = t.object_id
+           And ic.column_id = c.column_id
+           And i.is_primary_key = 1) PrimaryKeyConstraint,
+       object_name(fkc.constraint_object_id) ForeignKeyConstraint,
+       fs.name ForeignKeyTargetSchema,
+       ft.name ForeignKeyTargetTable,
+       fc.name ForeignKeyTargetColumn
+  From sys.columns c
+       Join sys.tables t On c.object_id = t.object_id
+       Join sys.schemas s On t.schema_id = s.schema_id
+       Join sys.types ty On c.user_type_id = ty.user_type_id
+       Left Join sys.foreign_key_columns fkc On fkc.parent_object_id = t.object_id And fkc.parent_column_id = c.column_id
+       Left Join sys.tables ft On fkc.referenced_object_id = ft.object_id
+       Left Join sys.schemas fs On ft.schema_id = fs.schema_id
+       Left Join sys.columns fc On fkc.referenced_object_id = fc.object_id And fkc.referenced_column_id = fc.column_id
+Order By 1, 2, 3";
+
+// For non-SQL later
+//            internal const string FetchSQL = @"
+//Select c.TABLE_SCHEMA [Schema],
+//       c.TABLE_NAME TableName,
+//       c.ORDINAL_POSITION Position,
+//       c.COLUMN_NAME ColumnName,
+//       c.COLUMN_DEFAULT ColumnDefault,
+//       Cast(Case c.IS_NULLABLE When 'YES' Then 1 Else 0 End as BIT) IsNullable,
+//       c.DATA_TYPE DataType,
+//       c.CHARACTER_MAXIMUM_LENGTH MaxLength,
+//       c.NUMERIC_PRECISION Precision,
+//       c.NUMERIC_PRECISION_RADIX NumericPrecisionRadix,
+//       c.NUMERIC_SCALE NumericScale,
+//       c.DATETIME_PRECISION DatetimePrecision,
+//       c.COLLATION_NAME CollationName,
+//       kcu.PrimaryKeyConstraint,
+//       kcu.ForeignKeyConstraint,
+//       kcu.ForeignKeyTargetSchema,
+//       kcu.ForeignKeyTargetTable,
+//       kcu.ForeignKeyTargetColumn
+//  From INFORMATION_SCHEMA.COLUMNS c
+//       Left Join (Select cu.TABLE_SCHEMA, 
+//                         cu.TABLE_NAME, 
+//                         cu.COLUMN_NAME,
+//                         (Case When OBJECTPROPERTY(OBJECT_ID(cu.CONSTRAINT_NAME), 'IsPrimaryKey') = 1
+//                               Then cu.CONSTRAINT_NAME
+//                               Else Null
+//                          End) as PrimaryKeyConstraint,
+//                          rc.CONSTRAINT_NAME ForeignKeyConstraint,
+//                          cut.TABLE_SCHEMA ForeignKeyTargetSchema,
+//                          cut.TABLE_NAME ForeignKeyTargetTable,
+//                          cut.COLUMN_NAME ForeignKeyTargetColumn
+//                    From INFORMATION_SCHEMA.KEY_COLUMN_USAGE cu
+//                         Left Join INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS rc
+//                           On cu.CONSTRAINT_CATALOG = rc.CONSTRAINT_CATALOG
+//                          And cu.CONSTRAINT_SCHEMA = rc.CONSTRAINT_SCHEMA
+//                          And cu.CONSTRAINT_NAME = rc.CONSTRAINT_NAME
+//                         Left Join INFORMATION_SCHEMA.KEY_COLUMN_USAGE cut
+//                          On rc.UNIQUE_CONSTRAINT_CATALOG = cut.CONSTRAINT_CATALOG
+//                          And rc.UNIQUE_CONSTRAINT_SCHEMA = cut.CONSTRAINT_SCHEMA
+//                          And rc.UNIQUE_CONSTRAINT_NAME = cut.CONSTRAINT_NAME) kcu
+//         On c.TABLE_SCHEMA = kcu.TABLE_SCHEMA
+//         And c.TABLE_NAME = kcu.TABLE_NAME
+//         And c.COLUMN_NAME = kcu.COLUMN_NAME
+//Order By c.TABLE_SCHEMA, c.TABLE_NAME, c.ORDINAL_POSITION";
 
             public string GetFetchSQL(Version v)
             {
@@ -394,7 +578,7 @@ Order By TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION";
 
         public class SQLDatabaseVLFInfo : ISQLVersionedObject
         {
-            public Version MinVersion { get { return SQLServerVersions.SQL2005.RTM; } }
+            public Version MinVersion => SQLServerVersions.SQL2005.RTM;
 
             public int DatabaseId { get; internal set; }
             public string DatabaseName { get; internal set; }
@@ -413,11 +597,13 @@ Create Table #vlfTemp (
     CreateLSN nvarchar(255)
 );
 
-Declare @sql nvarchar(max) = '';
+Declare @sql nvarchar(max);
+Set @sql = '';
 Select @sql = @sql + ' Insert #vlfTemp Exec ' + QuoteName(name) + '.sys.sp_executesql N''DBCC LOGINFO WITH NO_INFOMSGS'';
   Insert #VLFCounts Select ' + Cast(database_id as nvarchar(10)) + ',''' + name + ''', Count(*) From #vlfTemp;
   Truncate Table #vlfTemp;'
-  From sys.databases;
+  From sys.databases
+  Where state <> 6; -- Skip OFFLINE databases as they cause errors
 
 Exec sp_executesql @sql;
 Select * From #VLFCounts;
@@ -431,5 +617,6 @@ Drop Table #vlfTemp;";
                 return FetchSQL;
             }
         }
+        
     }
 }

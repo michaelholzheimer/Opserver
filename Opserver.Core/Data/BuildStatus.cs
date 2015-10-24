@@ -26,7 +26,7 @@ namespace StackExchange.Opserver.Data
                             {
                                 var c = GetClient();
                                 // grab all new builds with some overlap
-                                var newBuilds = c.AllBuildsSinceDate(_lastFetch.AddSeconds(-10));
+                                var newBuilds = c.Builds.AllSinceDate(_lastFetch.AddSeconds(-10));
                                 if (newBuilds != null && newBuilds.Any())
                                 {
                                     // merge into the list
@@ -62,8 +62,7 @@ namespace StackExchange.Opserver.Data
                 {
                     using (MiniProfiler.Current.Step("Get Build Configs"))
                     {
-                        var c = GetClient();
-                        result = c.AllBuildConfigs();
+                        result = GetAllBuildConfigs();
                         Current.LocalCache.Set(cacheKey, result, 60*60); // cache for an hour
                     }
                 }
@@ -87,7 +86,6 @@ namespace StackExchange.Opserver.Data
             List<string> map;
             if (Current.Settings.TeamCity.ServerMaps.TryGetValue(server.ToLowerInvariant(), out map))
             {
-                //var builds = csv.Split(StringSplits.Comma_SemiColon).ToList();
                 if(map.Any())
                 {
                     return map.SelectMany(GetBuildsById).OrderBy(b => b.StartDate).ToList();
@@ -104,7 +102,7 @@ namespace StackExchange.Opserver.Data
         public static List<BuildConfig> GetAllBuildConfigs()
         {
             var c = GetClient();
-            return c.AllBuildConfigs();
+            return c.BuildConfigs.All();
         }
 
         public static List<BuildConfig> GetBuildConfigsByServer(string server)
@@ -124,12 +122,18 @@ namespace StackExchange.Opserver.Data
         public static List<Project> GetAllProjects()
         {
             var c = GetClient();
-            return c.AllProjects();
+            return c.Projects.All();
         }
 
         public static TeamCityClient GetClient()
         {
-            var client = new TeamCityClient(Current.Settings.TeamCity.Url, useSsl: true);
+            TeamCityClient client;
+            Uri uri;
+            if (Uri.TryCreate(Current.Settings.TeamCity.Url, UriKind.Absolute, out uri))
+                client = new TeamCityClient(uri.Host, useSsl: uri.Scheme == Uri.UriSchemeHttps);
+            else
+                client = new TeamCityClient(Current.Settings.TeamCity.Url, useSsl: false);
+
             client.Connect(Current.Settings.TeamCity.User, Current.Settings.TeamCity.Password);
             return client;
         }

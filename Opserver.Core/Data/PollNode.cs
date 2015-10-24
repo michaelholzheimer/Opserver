@@ -4,6 +4,8 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Jil;
+using StackExchange.Opserver.Monitoring;
 using StackExchange.Profiling;
 
 namespace StackExchange.Opserver.Data
@@ -22,12 +24,13 @@ namespace StackExchange.Opserver.Data
         /// <summary>
         /// Number of consecutive cache fetch failures before backing off of polling the entire node for <see cref="BackoffDuration"/>
         /// </summary>
-        protected int FailsBeforeBackoff { get { return 3; } }
+        protected int FailsBeforeBackoff => 3;
+
         /// <summary>
         /// Length of time to backoff once <see cref="FailsBeforeBackoff"/> is hit
         /// </summary>
-        protected TimeSpan BackoffDuration { get { return TimeSpan.FromMinutes(2); } }
-        
+        protected virtual TimeSpan BackoffDuration => TimeSpan.FromSeconds(30);
+
         /// <summary>
         /// Indicates if this was added to the global poller list, if false that means this is a duplicate
         /// and should not be used anywhere, you lost the race, let it go.
@@ -52,6 +55,7 @@ namespace StackExchange.Opserver.Data
         }
         
         private readonly object _monitorStatusLock = new object();
+        protected MonitorStatus? PreviousMonitorStatus;
         protected MonitorStatus? CachedMonitorStatus;
         public virtual MonitorStatus MonitorStatus
         {
@@ -83,6 +87,16 @@ namespace StackExchange.Opserver.Data
                             CachedMonitorStatus = GetMonitorStatus().ToList().GetWorstStatus();
                             MonitorStatusReason = CachedMonitorStatus == MonitorStatus.Good ? null : GetMonitorStatusReason();
                         }
+                        if (!PreviousMonitorStatus.HasValue || PreviousMonitorStatus != CachedMonitorStatus)
+                        {
+                            var handler = MonitorStatusChanged;
+                            handler?.Invoke(this, new MonitorStatusArgs
+                            {
+                                OldMonitorStatus = PreviousMonitorStatus.Value,
+                                NewMonitorStatus = CachedMonitorStatus.Value
+                            });
+                            PreviousMonitorStatus = CachedMonitorStatus;
+                        }
                     }
                 }
                 return CachedMonitorStatus.GetValueOrDefault(MonitorStatus.Unknown);
@@ -100,32 +114,40 @@ namespace StackExchange.Opserver.Data
         protected int PollFailsInaRow = 0;
 
         protected volatile bool _isPolling;
-        public bool IsPolling { get { return _isPolling; } }
+        public bool IsPolling => _isPolling;
+
+        public AutoResetEvent FirstPollRun = new AutoResetEvent(false);
 
         protected Task _pollTask;
-        public virtual string PollTaskStatus
-        {
-            get { return _pollTask != null ? _pollTask.Status.ToString() : "Not running"; }
-        }
+        public virtual string PollTaskStatus => _pollTask?.Status.ToString() ?? "Not running";
 
-        public virtual void Poll(bool force = false)
+        public virtual void Poll(bool force = false, bool sync = false)
         {
             using (MiniProfiler.Current.Step("Poll - " + UniqueKey))
             {
                 // Don't poll more than once every n seconds, that's just rude
-                if (DateTime.UtcNow < LastPoll.GetValueOrDefault().AddSeconds(MinSecondsBetweenPolls)) 
+                if (!force && DateTime.UtcNow < LastPoll.GetValueOrDefault().AddSeconds(MinSecondsBetweenPolls)) 
                     return;
                  
                 // If we're seeing a lot of poll failures in a row, back the hell off
-                if (PollFailsInaRow >= FailsBeforeBackoff && DateTime.UtcNow < LastPoll.GetValueOrDefault() + BackoffDuration)
+                if (!force && PollFailsInaRow >= FailsBeforeBackoff && DateTime.UtcNow < LastPoll.GetValueOrDefault() + BackoffDuration)
                     return;
                 
                 // Prevent multiple poll threads for this node from running at once
                 if (_isPolling) return;
                 _isPolling = true;
 
-                _pollTask = Task.Factory.StartNew(() => InnerPoll(force));
+                if (sync)
+                    InnerPoll(force);
+                else
+                    _pollTask = Task.Factory.StartNew(() => InnerPoll(force));
             }
+        }
+
+        public bool WaitForFirstPoll(int timeoutMs)
+        {
+            var fr = FirstPollRun;
+            return fr == null || fr.WaitOne(timeoutMs);
         }
 
         /// <summary>
@@ -151,7 +173,12 @@ namespace StackExchange.Opserver.Data
                         Interlocked.Add(ref polled, pollerResult);
                     });
                 LastPoll = DateTime.UtcNow;
-                if (Polled != null) Polled(this, new PollResultArgs {Polled = polled});
+                Polled?.Invoke(this, new PollResultArgs {Polled = polled});
+                if (FirstPollRun != null)
+                {
+                    FirstPollRun.Set();
+                    FirstPollRun = null;
+                }
 
                 Interlocked.Add(ref _totalCachePolls, polled);
                 Interlocked.Increment(ref _totalPolls);
@@ -170,44 +197,65 @@ namespace StackExchange.Opserver.Data
         /// </summary>
         /// <typeparam name="T">Type of item in the cache</typeparam>
         /// <param name="description">Description of the operation, used purely for profiling</param>
-        /// <param name="getData">The operation used to actually get data, e.g. <code>using (var conn = GetConnection()) { return getFromConnection(conn); }</code></param>
+        /// <param name="getData">The operation used to actually get data, e.g. <code>using (var conn = GetConnectionAsync()) { return getFromConnection(conn); }</code></param>
         /// <param name="logExceptions">Whether to log any exceptions to the log</param>
         /// <param name="addExceptionData">Optionally add exception data, e.g. <code>e => e.AddLoggedData("Server", Name)</code></param>
         /// <returns>A cache update action, used when creating a <see cref="Cache"/>.</returns>
         protected Action<Cache<T>> UpdateCacheItem<T>(string description,
-                                                      Func<T> getData,
+                                                      Func<Task<T>> getData,
                                                       bool logExceptions = false, // TODO: Settings
                                                       Action<Exception> addExceptionData = null) where T : class
         {
-            return cache =>
+            return async cache =>
+            {
+                if (OpserverProfileProvider.EnablePollerProfiling)
                 {
-                    using (MiniProfiler.Current.Step(description))
+                    cache.Profiler = OpserverProfileProvider.CreateContextProfiler("Poll: " + description, cache.UniqueId);
+                }
+                using (MiniProfiler.Current.Step(description))
+                {
+                    CacheItemFetching?.Invoke(this, EventArgs.Empty);
+                    try
                     {
-                        if (CacheItemFetching != null) CacheItemFetching(this, EventArgs.Empty);
-                        try
+                        using (MiniProfiler.Current.Step("Data Fetch"))
                         {
-                            cache.Data = getData();
-                            cache.LastSuccess = cache.LastPoll = DateTime.UtcNow;
-                            cache.ErrorMessage = "";
-                            PollFailsInaRow = 0;
+                            cache.Data = await getData();
                         }
-                        catch (Exception e)
-                        {
-                            if (logExceptions)
-                            {
-                                if (addExceptionData != null)
-                                    addExceptionData(e);
-                                Current.LogException(e);
-                            }
-                            cache.LastPoll = DateTime.UtcNow;
-                            PollFailsInaRow++;
-                            cache.ErrorMessage = "Unable to fetch from " + NodeType + ": " + e.Message;
-                            if (e.InnerException != null) cache.ErrorMessage += "\n" + e.InnerException.Message;
-                        }
-                        if (CacheItemFetched != null) CacheItemFetched(this, EventArgs.Empty);
-                        CachedMonitorStatus = null;
+                        cache.LastSuccess = cache.LastPoll = DateTime.UtcNow;
+                        cache.ErrorMessage = "";
+                        PollFailsInaRow = 0;
                     }
-                };
+                    catch (Exception e)
+                    {
+                        var deserializationException = e as DeserializationException;
+                        if (deserializationException != null)
+                        {
+                            e.AddLoggedData("Snippet-After", deserializationException.SnippetAfterError)
+                             .AddLoggedData("Position", deserializationException.Position.ToString())
+                             .AddLoggedData("Ended-Unexpectedly", deserializationException.EndedUnexpectedly.ToString());
+                        }
+                        if (logExceptions)
+                        {
+                            addExceptionData?.Invoke(e);
+                            Current.LogException(e);
+                        }
+                        cache.LastPoll = DateTime.UtcNow;
+                        PollFailsInaRow++;
+                        cache.ErrorMessage = "Unable to fetch from " + NodeType + ": " + e.Message;
+#if DEBUG
+                        cache.ErrorMessage += " @ " + e.StackTrace;
+#endif
+
+                        if (e.InnerException != null) cache.ErrorMessage += "\n" + e.InnerException.Message;
+                    }
+                    CacheItemFetched?.Invoke(this, EventArgs.Empty);
+                    CachedMonitorStatus = null;
+                }
+                if (OpserverProfileProvider.EnablePollerProfiling)
+                {
+                    OpserverProfileProvider.StopContextProfiler();
+                }
+            };
         }
 
         public void Dispose()

@@ -1,64 +1,30 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.Collections.Specialized;
 using System.ComponentModel;
 using System.IO;
+using System.Linq;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
-using System.Threading.Tasks;
-using System.Linq;
-
-using System.Reflection;
+using System.Text.RegularExpressions;
 using System.Threading;
-using Nest;
-using StackExchange.Profiling;
-using StackExchange.Opserver.Helpers;
+using System.Threading.Tasks;
+using StackExchange.Elastic;
 using StackExchange.Opserver.Data;
+using StackExchange.Opserver.Helpers;
+using StackExchange.Profiling;
+using StackExchange.Redis;
 using TeamCitySharp.DomainEntities;
-using LocalCache = StackExchange.Opserver.Helpers.LocalCache;
 
 namespace StackExchange.Opserver
 {
     /// <summary>
     /// Provides a centralized place for common functionality exposed via extension methods.
     /// </summary>
-    public static class ExtensionMethods
+    public static partial class ExtensionMethods
     {
         public static string ExceptionLogPrefix = "ErrorLog-";
-    
-        public static void Raise(this EventHandler handler, object sender, EventArgs e)
-        {
-            if (handler != null) handler(sender, e);
-        }
-
-        public static void Raise<T>(this EventHandler<T> handler, object sender, T e) where T : EventArgs
-        {
-            if (handler != null) handler(sender, e);
-        }
-
-        public static ObservableCollection<T> AddHandlers<T>(this ObservableCollection<T> collection,
-                                                             IAfterLoadActions settings,
-                                                             EventHandler<T> add,
-                                                             EventHandler<List<T>> change,
-                                                             EventHandler<T> remove) where T : class
-        {
-            collection.CollectionChanged += (s, args) =>
-                {
-                    change(settings, collection.ToList());
-                    switch (args.Action)
-                    {
-                        case NotifyCollectionChangedAction.Add:
-                            add(settings, args.NewItems[0] as T);
-                            break;
-                        case NotifyCollectionChangedAction.Remove:
-                            remove(settings, args.OldItems[0] as T);
-                            break;
-                    }
-                };
-            return collection;
-        }
 
         /// <summary>
         /// Answers true if this String is either null or empty.
@@ -95,6 +61,14 @@ namespace StackExchange.Opserver
                     return t;
             }
             return "";
+        }
+
+        /// <summary>
+        /// If this string ends in "toTrim", this will trim it once off the end
+        /// </summary>
+        public static string TrimEnd(this string s, string toTrim)
+        {
+            return s != null && toTrim != null && s.EndsWith(toTrim) ? s.Substring(0, s.Length - toTrim.Length) : s;
         }
 
         /// <summary>
@@ -158,7 +132,25 @@ namespace StackExchange.Opserver
             if (s.IsNullOrEmpty()) return s;
             if (s.Length <= maxLength) return s;
 
-            return string.Format("{0}...", Truncate(s, maxLength - 3));
+            return $"{Truncate(s, Math.Max(maxLength, 3) - 3)}...";
+        }
+        public static string CleanCRLF(this string s)
+        {
+            if (string.IsNullOrWhiteSpace(s))
+                return s;
+            return s.Replace("\r\n", " ").Replace("\r", " ").Replace("\n", " ");
+        }
+
+        public static string NormalizeHostOrFQDN(this string s, bool defaultToHttps = false)
+        {
+            if (!s.HasValue()) return s;
+            if (!s.StartsWith("http://") && !s.StartsWith("https://")) return $"{(defaultToHttps ? "https" : "http")}://{s}/";
+            return s.EndsWith("/") ? s : $"{s}/";
+        }
+
+        public static HashSet<T> ToHashSet<T>(this IEnumerable<T> items)
+        {
+            return new HashSet<T>(items);
         }
 
         public static bool HasData(this Cache cache)
@@ -167,7 +159,7 @@ namespace StackExchange.Opserver
         }
         public static T SafeData<T>(this Cache<T> cache, bool emptyIfMissing = false) where T : class, new()
         {
-            return (cache != null ? cache.Data : null) ?? (emptyIfMissing ? new T() : null);
+            return cache?.Data ?? (emptyIfMissing ? new T() : null);
         }
 
         public static IEnumerable<T> WithIssues<T>(this IEnumerable<T> items) where T : IMonitorStatus
@@ -418,7 +410,7 @@ namespace StackExchange.Opserver
         public static string GetDescription<T>(this T enumerationValue) where T : struct
         {
             var type = enumerationValue.GetType();
-            if (!type.IsEnum) throw new ArgumentException("EnumerationValue must be of Enum type", "enumerationValue");
+            if (!type.IsEnum) throw new ArgumentException("EnumerationValue must be of Enum type", nameof(enumerationValue));
             var memberInfo = type.GetMember(enumerationValue.ToString());
             if (memberInfo.Length > 0)
             {
@@ -466,7 +458,7 @@ namespace StackExchange.Opserver
         public static string ToComma(this int number, string valueIfZero = null)
         {
             if (number == 0 && valueIfZero != null) return valueIfZero;
-            return string.Format("{0:n0}", number);
+            return $"{number:n0}";
         }
 
         public static string ToComma(this long? number, string valueIfZero = null)
@@ -477,7 +469,7 @@ namespace StackExchange.Opserver
         public static string ToComma(this long number, string valueIfZero = null)
         {
             if (number == 0 && valueIfZero != null) return valueIfZero;
-            return string.Format("{0:n0}", number);
+            return $"{number:n0}";
         }
 
         public static string ToTimeStringMini(this TimeSpan span, int maxElements = 2)
@@ -521,8 +513,7 @@ namespace StackExchange.Opserver
             [CallerFilePath] string sourceFilePath = "",
             [CallerLineNumber] int sourceLineNumber = 0)
         {
-            if (profiler == null) return null;
-            return profiler.Step(string.Format("{0} - {1}:{2}", memberName, Path.GetFileName(sourceFilePath), sourceLineNumber));
+            return profiler?.Step($"{memberName} - {Path.GetFileName(sourceFilePath)}:{sourceLineNumber}");
         }
 
         private static readonly ConcurrentDictionary<string, object> _getSetNullLocks = new ConcurrentDictionary<string, object>();
@@ -705,46 +696,41 @@ namespace StackExchange.Opserver
             public const string Relocating = "RELOCATING";
         }
 
-        public static MonitorStatus GetMonitorStatus(this RoutingShard shard)
+        public static MonitorStatus GetMonitorStatus(this ShardState shard)
         {
-            if (shard != null)
+            switch (shard?.State)
             {
-                switch (shard.State)
-                {
-                    case ShardStates.Unassigned:
-                        return MonitorStatus.Critical;
-                    case ShardStates.Initializing:
-                        return MonitorStatus.Warning;
-                    case ShardStates.Started:
-                        return MonitorStatus.Good;
-                    case ShardStates.Relocating:
-                        return MonitorStatus.Maintenance;
-                }
+                case ShardStates.Unassigned:
+                    return MonitorStatus.Critical;
+                case ShardStates.Initializing:
+                    return MonitorStatus.Warning;
+                case ShardStates.Started:
+                    return MonitorStatus.Good;
+                case ShardStates.Relocating:
+                    return MonitorStatus.Maintenance;
+                default:
+                    return MonitorStatus.Unknown;
             }
-            return MonitorStatus.Unknown;
         }
 
-        public static string GetPrettyState(this RoutingShard shard)
+        public static string GetPrettyState(this ShardState shard)
         {
-            if (shard != null)
+            switch (shard?.State)
             {
-                switch (shard.State)
-                {
-                    case ShardStates.Unassigned:
-                        return "Unassigned";
-                    case ShardStates.Initializing:
-                        return "Initializing";
-                    case ShardStates.Started:
-                        return "Started";
-                    case ShardStates.Relocating:
-                        return "Relocating";
-                }
+                case ShardStates.Unassigned:
+                    return "Unassigned";
+                case ShardStates.Initializing:
+                    return "Initializing";
+                case ShardStates.Started:
+                    return "Started";
+                case ShardStates.Relocating:
+                    return "Relocating";
+                default:
+                    return "Unknown";
             }
-            return "Unknown";
-            
         }
 
-        public static string GetStateDescription(this RoutingShard shard)
+        public static string GetStateDescription(this ShardState shard)
         {
             if (shard != null)
             {
@@ -761,6 +747,28 @@ namespace StackExchange.Opserver
                 }
             }
             return "Unknown";
+        }
+
+        private static readonly Regex _traceRegex = new Regex(@"(.*).... \((\d+) more bytes\)$", RegexOptions.Compiled);
+        public static string TraceDescription(this CommandTrace trace, int? truncateTo = null)
+        {
+            if (truncateTo != null && trace.Arguments.Length >= 4)
+            {
+                var match = _traceRegex.Match(trace.Arguments[3]);
+                if (match.Success)
+                {
+                    var startStr = string.Join(" ", trace.Arguments.Take(2));
+                    var message = match.Groups[1].Value.TruncateWithEllipsis(truncateTo.Value);
+                    var bytesTotal = int.Parse(match.Groups[2].Value) + message.Length;
+                    int bytesLeft = truncateTo.Value - startStr.Length;
+                    
+                    return startStr + (bytesLeft > 3
+                        ? $" {message.TruncateWithEllipsis(bytesLeft)} ({bytesTotal.Pluralize("byte")} total)"
+                        : $" ({bytesTotal.Pluralize("byte")} total)");
+                }
+            }
+
+            return string.Join(" ", trace.Arguments);
         }
     }
 
@@ -781,10 +789,11 @@ namespace StackExchange.Opserver
         /// <param name="bytes">This value.</param>
         /// <param name="unit">Unit to use in the fomat, defaults to B for bytes</param>
         /// <param name="precision">How much precision to show, defaults to 2</param>
+        /// <param name="zero">String to show if the value is 0</param>
         /// <returns>Filesize and quantifier formatted as a string.</returns>
-        public static string ToSize(this int bytes, string unit = "B", int precision = _precision)
+        public static string ToSize(this int bytes, string unit = "B", int precision = _precision, string zero = "n/a")
         {
-            return ToSize((double)bytes, unit, precision);
+            return ToSize((double)bytes, unit, precision, zero: zero);
         }
 
         /// <summary>
@@ -793,10 +802,11 @@ namespace StackExchange.Opserver
         /// <param name="bytes">This value.</param>
         /// <param name="unit">Unit to use in the fomat, defaults to B for bytes</param>
         /// <param name="precision">How much precision to show, defaults to 2</param>
+        /// <param name="zero">String to show if the value is 0</param>
         /// <returns>Filesize and quantifier formatted as a string.</returns>
-        public static string ToSize(this long bytes, string unit = "B", int precision = _precision)
+        public static string ToSize(this long bytes, string unit = "B", int precision = _precision, string zero = "n/a")
         {
-            return ToSize((double)bytes, unit, precision);
+            return ToSize((double)bytes, unit, precision, zero: zero);
         }
 
         /// <summary>
@@ -805,10 +815,11 @@ namespace StackExchange.Opserver
         /// <param name="bytes">This value.</param>
         /// <param name="unit">Unit to use in the fomat, defaults to B for bytes</param>
         /// <param name="precision">How much precision to show, defaults to 2</param>
+        /// <param name="zero">String to show if the value is 0</param>
         /// <returns>Filesize and quantifier formatted as a string.</returns>
-        public static string ToSize(this float bytes, string unit = "B", int precision = _precision)
+        public static string ToSize(this float bytes, string unit = "B", int precision = _precision, string zero = "n/a")
         {
-            return ToSize((double)bytes, unit, precision);
+            return ToSize((double)bytes, unit, precision, zero: zero);
         }
 
         /// <summary>
@@ -818,14 +829,15 @@ namespace StackExchange.Opserver
         /// <param name="unit">Unit to use in the fomat, defaults to B for bytes</param>
         /// <param name="precision">How much precision to show, defaults to 2</param>
         /// <param name="kiloSize">1k size, usually 1024 or 1000 depending on context</param>
+        /// <param name="zero">String to show if the value is 0</param>
         /// <returns>Filesize and quantifier formatted as a string.</returns>
-        public static string ToSize(this double bytes, string unit = "B", int precision = _precision, int kiloSize = 1024)
+        public static string ToSize(this double bytes, string unit = "B", int precision = _precision, int kiloSize = 1024, string zero = "n/a")
         {
-            if (bytes < 1) return "n/a";
+            if (bytes < 1) return zero;
             var pow = Math.Floor((bytes > 0 ? Math.Log(bytes) : 0) / Math.Log(kiloSize));
             pow = Math.Min(pow, _units.Count - 1);
             var value = bytes / Math.Pow(kiloSize, pow);
-            return value.ToString(pow == 0 ? "F0" : "F" + precision.ToString()) + " " + _units[(int)pow] + unit;
+            return value.ToString(pow == 0 ? "F0" : "F" + precision) + " " + _units[(int)pow] + unit;
         }
     }
 }

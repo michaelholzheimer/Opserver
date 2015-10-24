@@ -8,8 +8,8 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using BookSleeve;
 using StackExchange.Profiling;
+using StackExchange.Redis;
 
 namespace StackExchange.Opserver.Data.Redis
 {
@@ -36,26 +36,14 @@ namespace StackExchange.Opserver.Data.Redis
 
         private static string GetMemoryAnalysisKey(RedisConnectionInfo connectionInfo, int database)
         {
-            return string.Format("redis-memory-analysis-{0}:{1}:{2}", connectionInfo.Host, connectionInfo.Port, database);
+            return $"redis-memory-analysis-{connectionInfo.Host}:{connectionInfo.Port}:{database}";
         }
 
-        public static RedisMemoryAnalysis AnalyzerDatabaseMemory(RedisConnectionInfo connectionInfo, int database, bool runOnMaster = false)
+        public static RedisMemoryAnalysis AnalyzeDatabaseMemory(RedisConnectionInfo connectionInfo, int database)
         {
-            if (!runOnMaster) // in bad situations, we may have to do this
-            {
-                var serverInfo = RedisInstance.GetInstance(connectionInfo);
-                if (serverInfo.IsMaster)
-                {
-                    return new RedisMemoryAnalysis(connectionInfo, database)
-                    {
-                        ErrorMessage = "Cannot run memory analysis on a master - it hurts."
-                    };
-                }
-            }
-
             using (MiniProfiler.Current.Step("Redis Memory Analysis for " + connectionInfo + " - DB:" + database))
             {
-                return Current.LocalCache.GetSet<RedisMemoryAnalysis>(GetMemoryAnalysisKey(connectionInfo, database), (old, ctx) => GetDatabaseMemoryAnalysis(connectionInfo, database, runOnMaster), 24 * 60 * 60, 24 * 60 * 60);
+                return Current.LocalCache.GetSet<RedisMemoryAnalysis>(GetMemoryAnalysisKey(connectionInfo, database), (old, ctx) => GetDatabaseMemoryAnalysis(connectionInfo, database), 24 * 60 * 60, 24 * 60 * 60);
             }
         }
 
@@ -64,9 +52,20 @@ namespace StackExchange.Opserver.Data.Redis
             Current.LocalCache.Remove(GetMemoryAnalysisKey(connectionInfo, database));
         }
 
-        private static RedisMemoryAnalysis GetDatabaseMemoryAnalysis(RedisConnectionInfo connectionInfo, int database, bool runOnMaster = false)
+        private static RedisMemoryAnalysis GetDatabaseMemoryAnalysis(RedisConnectionInfo connectionInfo, int database)
         {
-            using (var rc = new RedisConnection(connectionInfo.Host, connectionInfo.Port, syncTimeout: 10 * 60 * 1000, allowAdmin: true))
+            var config = new ConfigurationOptions
+            {
+                SyncTimeout = 10 * 60 * 1000,
+                AllowAdmin = true,
+                ClientName = "Status-MemoryAnalyzer",
+                Password = connectionInfo.Password,
+                EndPoints =
+                {
+                    { connectionInfo.Host, connectionInfo.Port }
+                }
+            };
+            using (var muxer = ConnectionMultiplexer.Connect(config))
             {
                 var ma = new RedisMemoryAnalysis(connectionInfo, database);
                 if (ma.ErrorMessage.HasValue())
@@ -79,20 +78,7 @@ namespace StackExchange.Opserver.Data.Redis
                     ma.KeyStats[km] = new KeyStats();
                 }
 
-                rc.Name = "Status-MemoryAnalyzer";
-                rc.Wait(rc.Open());
-
-                if (!runOnMaster)
-                {
-                    var role = rc.Wait(rc.Server.GetInfo("replication"))["role"];
-                    if (string.Equals(role, "master", StringComparison.InvariantCultureIgnoreCase))
-                    {
-                        ma.ErrorMessage = "Cannot be run on a master";
-                        return ma;
-                    }
-                }
-
-                ma.Analyze(rc);
+                ma.Analyze(muxer);
 
                 return ma;
             }
@@ -102,13 +88,13 @@ namespace StackExchange.Opserver.Data.Redis
     public class RedisMemoryAnalysis : IMonitorStatus
     {
         public RedisConnectionInfo ConnectionInfo { get; internal set; }
-        public bool IsGlobal { get { return Database == -1; } }
+        public bool IsGlobal => Database == -1;
         public int Database { get; internal set; }
         public DateTime CreationDate { get; internal set; }
 
         public TimeSpan KeyTime { get; internal set; }
         public TimeSpan AnalysisTime { get; internal set; }
-        public TimeSpan TotalTime { get { return KeyTime + AnalysisTime; } }
+        public TimeSpan TotalTime => KeyTime + AnalysisTime;
 
         public List<KeyMatcher> KeyMatchers { get; internal set; }
         public ConcurrentDictionary<KeyMatcher,KeyStats> KeyStats { get; internal set; }
@@ -155,23 +141,25 @@ namespace StackExchange.Opserver.Data.Redis
         private long _valueByteSize;
         private long _errorCount;
 
-        public long Count { get { return _count; } }
-        public long KeyByteSize { get { return _keyByteSize; } }
-        public long ValueByteSize { get { return _valueByteSize; } }
-        public long TotalByteSize { get { return _keyByteSize + _valueByteSize; } }
-        public long ErrorCount { get { return _errorCount; } }
+        public long Count => _count;
+        public long KeyByteSize => _keyByteSize;
+        public long ValueByteSize => _valueByteSize;
+        public long TotalByteSize => _keyByteSize + _valueByteSize;
+        public long ErrorCount => _errorCount;
 
         public string ErrorMessage { get; internal set; }
 
-        public void Analyze(RedisConnection rc)
+        public void Analyze(ConnectionMultiplexer muxer)
         {
             // Get the keys
             var sw = Stopwatch.StartNew();
-            var keys = rc.Wait(rc.Keys.Find(Database, "*"));
+
+            var db = muxer.GetDatabase(Database);
+            var server = muxer.GetSingleServer();
+            var keys = server.Keys(Database, pageSize: 1000);
             KeyTime = sw.Elapsed;
 
-            rc.CompletionMode = ResultCompletionMode.PreserveOrder;
-
+            muxer.PreserveAsyncOrder = true;
             // Analyze each key
             sw.Restart();
             using (MiniProfiler.Current.Step("Key analysis"))
@@ -180,7 +168,7 @@ namespace StackExchange.Opserver.Data.Redis
                 foreach (var tmpKey in keys)
                 {
                     var key = tmpKey;
-                    last = rc.Keys.DebugObject(Database, key).ContinueWith(x =>
+                    last = db.DebugObjectAsync(key).ContinueWith(x =>
                         {
                             try
                             {
@@ -192,7 +180,7 @@ namespace StackExchange.Opserver.Data.Redis
                             }
                         });
                 }
-                if (last != null) rc.Wait(last);
+                if (last != null) server.Wait(last);
             }
             AnalysisTime = sw.Elapsed;
             sw.Stop();
@@ -258,9 +246,9 @@ namespace StackExchange.Opserver.Data.Redis
     {
         public string Name { get; internal set; }
         public KeyMatcher Matcher { get; internal set; }
-        public int KeyBytes { get { return Encoding.UTF8.GetByteCount(Name); } }
+        public int KeyBytes => Encoding.UTF8.GetByteCount(Name);
         public long ValueBytes { get; internal set; }
-        public long TotalBytes { get { return KeyBytes + ValueBytes; } }
+        public long TotalBytes => KeyBytes + ValueBytes;
     }
 
     public class KeyMatcher
@@ -277,10 +265,10 @@ namespace StackExchange.Opserver.Data.Redis
         internal long _keyByteSize;
         internal long _valueByteSize;
 
-        public long Count { get { return _count; } }
-        public long KeyByteSize { get { return _keyByteSize; } }
-        public long ValueByteSize { get { return _valueByteSize; } }
-        public long TotalByteSize { get { return _keyByteSize + _valueByteSize; } }
+        public long Count => _count;
+        public long KeyByteSize => _keyByteSize;
+        public long ValueByteSize => _valueByteSize;
+        public long TotalByteSize => _keyByteSize + _valueByteSize;
 
         public SortedList<long, string> TopKeys = new SortedList<long, string>(50, new DescLongCompare());
 

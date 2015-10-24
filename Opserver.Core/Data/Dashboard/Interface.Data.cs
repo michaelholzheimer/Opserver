@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 
 namespace StackExchange.Opserver.Data.Dashboard
 {
@@ -17,18 +16,6 @@ namespace StackExchange.Opserver.Data.Dashboard
 
             public Single? OutMaxBps { get; internal set; }
             public Single? OutAvgBps { get; internal set; }
-        }
-
-        /// <summary>
-        /// Gets usage for this interface (optionally) for the given time period, optionally sampled if pointCount is specified
-        /// </summary>
-        /// <param name="start">Start date, unbounded if null</param>
-        /// <param name="end">End date, unbounded if null</param>
-        /// <param name="pointCount">Points to return, if specified results will be sampled rather than including every point</param>
-        /// <returns>Interface usage data points</returns>
-        public IEnumerable<InterfaceUtilization> GetUtilization(DateTime? start, DateTime? end, int? pointCount = null)
-        {
-            return DataProvider.GetUtilization(this, start, end, pointCount);
         }
     }
 }

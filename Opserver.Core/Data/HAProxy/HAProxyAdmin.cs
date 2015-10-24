@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using System.Net.Sockets;
 using System.Text;
@@ -18,6 +19,10 @@ namespace StackExchange.Opserver.Data.HAProxy
             var matchingServers = proxies.SelectMany(p => p.Servers.Where(s => s.Name == serverName || serverName.IsNullOrEmpty()).Select(s => new { Proxy = p, Server = s }));
             Parallel.ForEach(matchingServers, _parallelOptions, pair =>
             {
+                // HAProxy will not drain a downed server, do the next best thing: MAINT
+                if (action == Action.drain && pair.Server.ProxyServerStatus == ProxyServerStatus.Down)
+                    action = Action.maint;
+
                 result = result && PostAction(pair.Proxy, pair.Server, action);
             });
             return result;
@@ -74,11 +79,10 @@ namespace StackExchange.Opserver.Data.HAProxy
             // if we can't issue any commands, bomb out
             if (instance.AdminUser.IsNullOrEmpty() || instance.AdminPassword.IsNullOrEmpty()) return false;
 
-            var loginInfo = instance.AdminUser + ":" + instance.AdminPassword;
+            var loginInfo = $"{instance.AdminUser}:{instance.AdminPassword}";
             var haproxyUri = new Uri(instance.Url);
-            var requestBody = string.Format("s={0}&action={1}&b={2}", server.Name, action.ToString().ToLower(), p.Name);
-            var requestHeader = string.Format("POST {0} HTTP/1.1\r\nHost: {1}\r\nContent-Length: {2}\r\nAuthorization: Basic {3}\r\n\r\n",
-                haproxyUri.AbsolutePath, haproxyUri.Host, Encoding.GetEncoding("ISO-8859-1").GetBytes(requestBody).Length, Convert.ToBase64String(Encoding.Default.GetBytes(loginInfo)));
+            var requestBody = $"s={server.Name}&action={action.ToString().ToLower()}&b={p.Name}";
+            var requestHeader = $"POST {haproxyUri.AbsolutePath} HTTP/1.1\r\nHost: {haproxyUri.Host}\r\nContent-Length: {Encoding.GetEncoding("ISO-8859-1").GetBytes(requestBody).Length}\r\nAuthorization: Basic {Convert.ToBase64String(Encoding.Default.GetBytes(loginInfo))}\r\n\r\n";
 
             try
             {
@@ -102,8 +106,37 @@ namespace StackExchange.Opserver.Data.HAProxy
 
         public enum Action
         {
+            // ReSharper disable InconsistentNaming
+            [Description("Set State to READY")]
+            ready,
+            [Description("Set State to DRAIN")]
+            drain,
+            [Description("Set State to MAINT")]
+            maint,
+            [Description("Health: disable checks")]
+            dhlth,
+            [Description("Health: enable checks")]
+            ehlth,
+            [Description("Health: force UP")]
+            hrunn,
+            [Description("Health: force NOLB")]
+            hnolb,
+            [Description("Health: force DOWN")]
+            hdown,
+            [Description("Agent: disable checks")]
+            dagent,
+            [Description("Agent: enable checks")]
+            eagent,
+            [Description("Agent: force UP")]
+            arunn,
+            [Description("Agent: force DOWN")]
+            adown,
+            [Description("Kill Sessions")]
+            shutdown,
+
             Enable,
             Disable
+            // ReSharper restore InconsistentNaming
         }
     }
 }

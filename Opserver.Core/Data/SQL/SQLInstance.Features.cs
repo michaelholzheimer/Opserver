@@ -5,18 +5,16 @@ namespace StackExchange.Opserver.Data.SQL
     public partial class SQLInstance
     {
         private Cache<SQLServerFeatures> _serverFeatures;
-        public Cache<SQLServerFeatures> ServerFeatures
-        {
-            get { return _serverFeatures ?? (_serverFeatures = SqlCacheSingle<SQLServerFeatures>(60 * 60)); }
-        }
+        public Cache<SQLServerFeatures> ServerFeatures => _serverFeatures ?? (_serverFeatures = SqlCacheSingle<SQLServerFeatures>(60 * 60));
 
         public class SQLServerFeatures : ISQLVersionedObject
         {
-            public Version MinVersion { get { return SQLServerVersions.SQL2000.RTM; } }
-
-            public bool HasSPWhoIsActive { get; private set; }
-            public bool HasSPBlitz { get; private set; }
-            public bool HasSPBlitzIndex { get; private set; }
+            public Version MinVersion => SQLServerVersions.SQL2000.RTM;
+            
+            public bool HasSPWhoIsActive { get; internal set; }
+            public bool HasSPBlitz { get; internal set; }
+            public bool HasSPBlitzIndex { get; internal set; }
+            public bool HasSPAskBrent { get; internal set; }
 
             internal const string FetchSQL = @"
 With Procs (name) as (
@@ -26,7 +24,8 @@ Select name COLLATE Latin1_General_CI_AS From master.sys.objects Where type = 'P
 
 Select (Select Cast(Count(*) As BIT) From Procs Where name = 'sp_whoIsActive') as HasSPWhoIsActive,
        (Select Cast(Count(*) As BIT) From Procs Where name = 'sp_Blitz') as HasSPBlitz,
-       (Select Cast(Count(*) As BIT) From Procs Where name = 'sp_Blitz') as HasSPBlitzIndex";
+       (Select Cast(Count(*) As BIT) From Procs Where name = 'sp_BlitzIndex') as HasSPBlitzIndex,
+       (Select Cast(Count(*) As BIT) From Procs Where name = 'sp_AskBrent') as HasSPAskBrent";
 
             internal const string BatchFetchSQL = @"
 Declare @Supported Table (name sysname, header varchar(200));

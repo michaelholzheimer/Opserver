@@ -2,13 +2,16 @@
 @model StackExchange.Opserver.Views.Home.AboutModel
 @{
     this.SetPageTitle("About - Caches");
-    this.SetMainTab(MainTab.None);
     var pollingInfo = PollingEngine.GetPollingStatus();
     var pollerNodes = pollingInfo.Nodes
-        .OrderByDescending(n => n.IsPolling)
-        .ThenByWorst(n => n.DataPollers.GetWorstStatus())
+        .OrderByWorst(n => n.DataPollers.GetWorstStatus())
+        .ThenByDescending(n => n.IsPolling)
         .ThenBy(n => n.GetType().Name)
         .ThenBy(n => n.UniqueKey).ToList();
+    if (Model.Filter.HasValue())
+    {
+        pollerNodes = pollerNodes.Where(p => p.UniqueKey.IndexOf(Model.Filter, StringComparison.InvariantCultureIgnoreCase) != -1).ToList();
+    }
 }
 @helper GetTypeDescription(Type t) {
     if (t.IsGenericType && (t.GetGenericTypeDefinition() == typeof (List<>)))
@@ -97,10 +100,10 @@
                     <td>@pn.PollTaskStatus</td>
                     <td>
                         <a href="/json/@pn.NodeType/@pn.UniqueKey">JSON</a>
-                        <a href="#" class="poll-all-now" data-type="@pn.NodeType" data-key="@pn.UniqueKey">Poll All</a>
+                        <a href="#" class="poll-now" data-type="@pn.NodeType" data-key="@pn.UniqueKey">Poll All</a>
                     </td>
                 </tr>
-                foreach (var p in pollers.OrderByDescending(p => p.IsPolling).ThenBy(p => p.ParentMemberName))
+                foreach (var p in pollers.OrderByWorst().ThenByDescending(p => p.IsPolling).ThenBy(p => p.ParentMemberName))
                 {
                     <tr class="@(p.IsPolling ? "active" : "idle")-row @p.RowClass()">
                         <td title="@p.ErrorMessage">@p.IconSpan()</td>
@@ -134,7 +137,8 @@ Url: /@pn.NodeType/@pn.UniqueKey.UrlEncode()/@p.ParentMemberName">@GetTypeDescri
                         <td class="@(p.IsPolling ? "good" : "note")">(@(p.IsPolling ? "active" : "idle"))</td>
                         <td>
                             <a href="/json/@pn.NodeType/@pn.UniqueKey.UrlEncode()/@p.ParentMemberName">JSON</a> 
-                            <a href="#" class="poll-now" data-id="@p.UniqueId">Poll Now</a>
+                            <a href="/profiler/results?id=@p.UniqueId" target="_blank">Profile</a>
+                            <a href="#" class="poll-now" data-type="@pn.NodeType" data-key="@pn.UniqueKey" data-id="@p.UniqueId">Poll Now</a>
                         </td>
                     </tr>
                 }
@@ -151,14 +155,11 @@ Url: /@pn.NodeType/@pn.UniqueKey.UrlEncode()/@p.ParentMemberName">@GetTypeDescri
     }
     var polling = false;
     $(document).on('click', '.poll-now', function () {
-        var id = $(this).data('id');
-        if (!id) return false;
-        return pollAndReload(this, '/cache/poll', { id: id });
-    }).on('click', '.poll-all-now', function () {
         var type = $(this).data('type'),
-            key = $(this).data('key');
+            key = $(this).data('key'),
+            id = $(this).data('id');
         if (!type || !key) return false;
-        return pollAndReload(this, '/cache/poll/all', { type: type, key: key });
+        return pollAndReload(this, '/cache/poll', { type: type, key: key, id: id });
     });
     @if (Model.AutoRefresh)
 {

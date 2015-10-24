@@ -2,6 +2,11 @@
 @model SQLNode.AvailabilityGroupInfo
 @{
     var ag = Model;
+    if (!ag.HasDatabases)
+    {
+        // don't render empty AGs
+        return;
+    }
 }
 @helper RenderDBIssues(SQLNode.AvailabilityGroupReplicaInfo r) {
     if (r.SynchronizationHealth != SynchronizationHealths.Healthy)
@@ -9,7 +14,7 @@
         var unhealthy = r.Databases.Where(db => db.SynchronizationHealth.HasValue && db.SynchronizationHealth != SynchronizationHealths.Healthy);
         if (r.Databases.Count > unhealthy.Count())
         {
-            foreach (var db in unhealthy)
+            foreach (var db in unhealthy.OrderBy(u => u.DatabaseName))
             {
                 <div class="ag-db-error" title="@db.DatabaseName
 Sync: @(db.SynchronizationState.HasValue ? db.SynchronizationState.Value.GetDescription() : "Unknown")
@@ -36,8 +41,8 @@ Suspension Reason: @db.SuspendReason.GetDescription()</text>}">@db.IconSpan() @d
                         </div>
                         @RenderDBIssues(ag.LocalReplica)
                         <div class="ag-transfer">
-                            <span class="icon arrow up"></span>@(((long)ag.RemoteReplicas.Sum(r => r.BytesSentPerSecond)).ToSize()) <span class="note">/sec</span>
-                            <span class="icon arrow down"></span>@(((long)ag.RemoteReplicas.Sum(r => r.BytesReceivedPerSecond)).ToSize()) <span class="note">/sec</span>
+                            <span class="icon arrow up"></span>@(((long)ag.RemoteReplicas.Sum(r => r.BytesSentPerSecond)).ToSize(zero: "0")) <span class="note">/sec</span>
+                            <span class="icon arrow down"></span>@(((long)ag.RemoteReplicas.Sum(r => r.BytesReceivedPerSecond)).ToSize(zero: "0")) <span class="note">/sec</span>
                         </div>
                         <div class="ag-queue">
                             <span class="label">Log Size:</span> @ag.LocalReplica.Databases.Sum(db => db.LogKBytesUsed).ToComma() <span class="note">kB</span>
@@ -83,8 +88,8 @@ Suspension Reason: @db.SuspendReason.GetDescription()</text>}">@db.IconSpan() @d
                             </div>
                             @RenderDBIssues(r)
                             <div class="ag-transfer">
-                                <span class="icon arrow up"></span> @(((long)r.BytesReceivedPerSecond).ToSize()) <span class="note">/sec</span>
-                                <span class="icon arrow down"></span> @(((long)r.BytesSentPerSecond).ToSize()) <span class="note">/sec</span>
+                                <span class="icon arrow up"></span> @(((long)r.BytesReceivedPerSecond).ToSize(zero: "0")) <span class="note">/sec</span>
+                                <span class="icon arrow down"></span> @(((long)r.BytesSentPerSecond).ToSize(zero: "0")) <span class="note">/sec</span>
                             </div>
                             <div class="ag-queue">
                                 <span class="label">Queue:</span> @r.Databases.Sum(db => db.LogSendQueueSize).ToComma() <span class="note">kB</span>

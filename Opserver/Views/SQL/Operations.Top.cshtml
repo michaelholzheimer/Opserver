@@ -1,15 +1,12 @@
-﻿@using StackExchange.Profiling
-@using StackExchange.Opserver.Models
+﻿@using StackExchange.Opserver.Models
 @using StackExchange.Opserver.Data.SQL
 @using StackExchange.Opserver.Views.SQL
-@model DashboardModel
+@model OperationsTopModel
 @{
-    var s = Model.CurrentInstance;
-    Cache<List<SQLInstance.TopOperation>> topOps;
-    using (MiniProfiler.Current.Step("GetTopOperations"))
-    {
-        topOps = s.GetTopOperations(Model.TopSearchOptions);
-    }
+    var i = Model.CurrentInstance;
+    var topOps = Model.TopOperations;
+    var errorMessage = Model.ErrorMessage;
+    if (i == null) { return; }
 }
 @helper ReadableTime(long ms)
 {
@@ -28,22 +25,21 @@
     </th>
 }
 @helper RunInLast(DashboardModel.LastRunInterval interval, string label) {
-    var secs = @Model.LastRunIntervalSeconds(interval);
+    var secs = (int)interval;
     <label><input type="radio" name="LastRunSeconds" value="@secs" @(secs == Model.TopSearchOptions.LastRunSeconds ? "checked " : "")/> @label</label>
 }
 <div class="bottom-sub-section">
 <div class="node-summary redis-summary">
-    @if (topOps.ErrorMessage.HasValue())
+    @if (errorMessage.HasValue())
     {
         <div class="sql-server sql-error">
-            <span class="error-label">There was an error fetching server status from @s.Name:</span>
-            @topOps.ErrorMessage
+            <span class="error-label">There was an error fetching server status from @i.Name:</span>
+            @errorMessage
         </div>
     } else
     {
-        var data = topOps.SafeData(true);
         <div class="sql-server">
-            <h3 class="page-header">Top queries on @s.Name by @Model.TopSearchOptions.Sort.GetDescription():
+            <h3 class="page-header">Top queries on @i.Name by @Model.TopSearchOptions.Sort.GetDescription():
                 <div class="filters-wrap">
                     <div class="filters-current">
                         <span class="filter-label">Min Execs: </span><span class="filter-value">@Model.TopSearchOptions.MinExecs</span>
@@ -79,14 +75,24 @@
                                 @RunInLast(DashboardModel.LastRunInterval.FiveMinutes, "5 Minutes")
                             </div>
                             <div class="filter">
-                                Search: <input style="width: 240px;" type="text" value="@Model.TopSearchOptions.Search" name="search" title="string to search for in the query text" placeholder="Search Text (warning: may be slow)" />
+                                Search: <input style="width: 250px;" type="text" value="@Model.TopSearchOptions.Search" name="search" title="string to search for in the query text" placeholder="Search Text (warning: may be slow)" />
+                            </div>
+                            <div class="filter">
+                                Database: 
+                                <select style="width: 240px;" name="database">
+                                    <option value="" @(Model.TopSearchOptions.Database.HasValue ? "" : "selected ")>All Databases</option>
+                                    @foreach (var db in Model.CurrentInstance.Databases.SafeData(true).OrderBy(db => !db.IsSystemDatabase).ThenBy(db => db.Name))
+                                    {
+                                        <option value="@db.Id" @(Model.TopSearchOptions.Database == db.Id ? "selected " : "")>@db.Name</option>
+                                    }
+                                </select>
                             </div>
                             <button class="submit-button" type="submit">Apply</button>
                         </form>
                     </div>
                 </div>
             </h3>
-            <table class="node-dashboard">
+            <table class="striped-dashboard">
                 <thead>
                     <tr class="sort-row sort-category">
                         <th colspan="@(Model.Detailed ? 4 : 3)">CPU</th>
@@ -125,11 +131,11 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var o in data)
+                    @foreach (var o in topOps)
                     {
-                        <tr class="plan-row" data-plan-handle="@HttpServerUtility.UrlTokenEncode(o.PlanHandle)">
-                            <td class="number-col">@o.AvgCPU.ToComma() µs</td>
-                            <td class="number-col">@o.AvgCPUPerMinute.ToComma() µs</td>
+                        <tr class="plan-row" data-plan-handle="@HttpServerUtility.UrlTokenEncode(o.PlanHandle)" data-offset="@o.StatementStartOffset">
+                            <td class="number-col">@o.AvgCPU.ToComma()µs</td>
+                            <td class="number-col">@o.AvgCPUPerMinute.ToComma()µs</td>
                             <td class="number-col">@ReadableTime(o.TotalCPU/1000)</td>
                             @if(Model.Detailed){<td>@o.PercentCPU.ToString("0.00")</td>}
                             <td class="number-col">@ReadableTime(o.AvgDuration)</td>
@@ -149,7 +155,7 @@
                             <td class="query-col" title="@o.QueryText">@o.QueryText.TruncateWithEllipsis(80)</td>
                         </tr>
                     }
-                    @if (!data.Any())
+                    @if (!topOps.Any())
                     {
                         <tr>
                             <td colspan="@(Model.Detailed ? 19 : 12)"><div class="none-active">There are no operations in the plan cache on this server.</div></td>

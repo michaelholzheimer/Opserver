@@ -8,7 +8,7 @@ namespace StackExchange.Opserver.Data.SQL
     {
         public SQLCluster Cluster { get; internal set; }
 
-        public SQLNode(SQLCluster sqlCluster, SQLSettings.Instance node) : base(node.Name, node.ConnectionString)
+        public SQLNode(SQLCluster sqlCluster, SQLSettings.Instance node) : base(node.Name, node.ConnectionString, node.ObjectName)
         {
             Cluster = sqlCluster;
         }
@@ -34,6 +34,11 @@ namespace StackExchange.Opserver.Data.SQL
         public bool IsAnAGPrimary
         {
             get { return AvailabilityGroups.HasData() && AvailabilityGroups.Data.Any(ag => ag.IsPrimaryReplica); }
+        }
+
+        public bool IsAllAGsPrimary
+        {
+            get { return AvailabilityGroups.HasData() && AvailabilityGroups.Data.Where(ag => ag.HasDatabases).All(ag => ag.IsPrimaryReplica); }
         }
 
         protected override IEnumerable<MonitorStatus> GetMonitorStatus()

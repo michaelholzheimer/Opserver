@@ -1,48 +1,103 @@
 ﻿if (window.devicePixelRatio >= 2) {
-    $.cookie('highDPI', 'true', { expires: 365 * 10, path: '/' });
+    Cookies.set('highDPI', 'true', { expires: 365 * 10, path: '/' });
 }
 
 window.Status = (function () {
-    
-    var ajaxLoaders = {};
 
-    function refreshHeader() {
-        $.ajax('/top-refresh', {
-            data: { tab: Status.options.Tab },
-            success: function (html) {
-                var tabs = $(html).filter('.top-tabs');
-                if (tabs.length) {
-                    $('.top-tabs').replaceWith(tabs);
-                }
-                var issuesList = $(html).filter('.issues-list');
-                var curList = $('.issues-list');
-                if (issuesList.length) {
-                    var issueCount = issuesList.data('issue-count');
-                    // TODO: don't if hovering
-                    if (issueCount > 0) {
-                        if (!curList.children().length) {
-                            curList.replaceWith(issuesList.find('.issues-button').fadeIn().end());
-                        } else {
-                            $('.issues-button').html($('.issues-button', issuesList).html());
-                            $('.issues-dropdown').html($('.issues-dropdown', issuesList).html());
-                        }
-                    } else {
-                        curList.fadeOut(function() {
-                            $(this).empty();
-                        });
-                    }
-                }
-            },
-            error: Status.UI.ajaxError,
-            complete: function () {
-                setTimeout(refreshHeader, Status.options.HeaderRefresh * 1000);
+    var ajaxLoaders = {},
+        registeredRefreshes = {};
+
+    function registerRefresh(name, callback, interval, paused) {
+        var refreshData = {
+            name: name,
+            func: callback,
+            interval: interval,
+            paused: paused // false on init almost always
+        };
+        registeredRefreshes[name] = refreshData;
+        refreshData.timer = setTimeout(function() { execRefresh(refreshData); }, refreshData.interval);
+    }
+
+    function runRefresh(name) {
+        pauseRefresh(name);
+        resumeRefresh(name);
+    }
+
+    function execRefresh(refreshData) {
+        if (refreshData.paused) {
+            return;
+        }
+        var def = refreshData.func();
+        if (typeof (def.done) === "function") {
+            def.done(function () {
+                refreshData.timer = setTimeout(function () { execRefresh(refreshData); }, refreshData.interval);
+            });
+        }
+
+        refreshData.running = def;
+        refreshData.timer = 0;
+    }
+
+    function pauseRefresh(name) {
+
+        function pauseSingleRefresh(r) {
+            r.paused = true;
+            if (r.timer) {
+                clearTimeout(r.timer);
+                r.timer = 0;
             }
-        });
+            if (r.running) {
+                if (typeof (r.running.reject) === "function") {
+                    r.running.reject();
+                }
+                if (typeof (r.running.abort) === "function") {
+                    r.running.abort();
+                }
+            }
+        }
+
+        if (name && registeredRefreshes[name]) {
+            console.log('Refresh paused for: ' + name);
+            pauseSingleRefresh(registeredRefreshes[name]);
+            return;
+        }
+
+        console.log('Refresh paused');
+        for (var key in registeredRefreshes) {
+            if (registeredRefreshes.hasOwnProperty(key)) {
+                pauseSingleRefresh(registeredRefreshes[key]);
+            }
+        }
+    }
+
+    function resumeRefresh(name) {
+
+        function resumeSingleRefresh(r) {
+            if (r.timer) {
+                clearTimeout(r.timer);
+            }
+            r.paused = false;
+            execRefresh(r);
+        }
+
+        if (name && registeredRefreshes[name]) {
+            console.log('Refresh resumed for: ' + name);
+            resumeSingleRefresh(registeredRefreshes[name]);
+            return;
+        }
+
+        console.log('Refresh resumed');
+        for (var key in registeredRefreshes) {
+            if (registeredRefreshes.hasOwnProperty(key)) {
+                resumeSingleRefresh(registeredRefreshes[key]);
+            }
+        }
     }
 
     function summaryPopup(url, options, noClose, onClose) {
         var wrap = getPopup(noClose);
         wrap.load(url, options, function () {
+            // TODO: refresh intervals via header
             showSummaryPopup(onClose, 50);
         });
     }
@@ -91,7 +146,7 @@ window.Status = (function () {
         }
 
         container.css('height', 'auto');
-        active.css({ 'overflow-y': 'none', 'height': 'auto' });
+        active.css({ 'overflow-y': 'visible', 'height': 'auto' });
 
         var maxHeight = $(window).height() * 0.90;
         if (container.height() > maxHeight) {
@@ -102,7 +157,7 @@ window.Status = (function () {
         if (active[0].scrollHeight > visibleHeight) {
             active.css({ 'overflow-y': 'scroll', 'height': visibleHeight - 5 + 'px' });
         } else {
-            active.css({ 'overflow-y': 'none', 'height': visibleHeight + 'px' });
+            active.css({ 'overflow-y': 'visible', 'height': visibleHeight + 'px' });
         }
         $.modal.setPosition();
 
@@ -171,7 +226,34 @@ window.Status = (function () {
         Status.options = options;
 
         if (options.HeaderRefresh) {
-            setTimeout(refreshHeader, options.HeaderRefresh * 1000);
+            Status.refresh.register("TopBar", function () {
+                return $.ajax('/top-refresh', {
+                    data: { tab: Status.options.Tab },
+                }).done(function (html) {
+                    var tabs = $(html).filter('.top-tabs');
+                    if (tabs.length) {
+                        $('.top-tabs').replaceWith(tabs);
+                    }
+                    var issuesList = $(html).filter('.issues-list');
+                    var curList = $('.issues-list');
+                    if (issuesList.length) {
+                        var issueCount = issuesList.data('issue-count');
+                        // TODO: don't if hovering
+                        if (issueCount > 0) {
+                            if (!curList.children().length) {
+                                curList.replaceWith(issuesList.find('.issues-button').fadeIn().end());
+                            } else {
+                                $('.issues-button').html($('.issues-button', issuesList).html());
+                                $('.issues-dropdown').html($('.issues-dropdown', issuesList).html());
+                            }
+                        } else {
+                            curList.fadeOut(function () {
+                                $(this).empty();
+                            });
+                        }
+                    }
+                }).fail(Status.UI.ajaxError);
+            }, Status.options.HeaderRefresh * 1000);
         }
         
         var resizeTimer;
@@ -182,16 +264,53 @@ window.Status = (function () {
             }, 100);
         });
         $(document).on('click', '.reload-link', function (e) {
-            if ((this.href || '#') != '#') return;
-            window.location.reload(true);
+            var data = {
+                type: $(this).data('type'),
+                uniqueKey: $(this).data('uk'),
+                guid: $(this).data('guid')
+            };
+            if (!data.type && (this.href || '#') != '#') return;
+            if (data.type && data.uniqueKey) {
+                // Node to refresh, do it
+                var link = $(this).addClass('reloading');
+                link.find('.js-text')
+                    .text('Polling...');
+                Status.refresh.pause();
+                $.post('/poll', data)
+                    .fail(function () {
+                        toastr.error('There was an error polling this node.', 'Polling',
+                        {
+                            positionClass: 'toast-top-right-spaced',
+                            timeOut: 5 * 1000
+                        });
+                    }).done(function () {
+                        // TODO: Find nearest refresh parent after compartmentalization and refresh that node
+                        window.location.reload(true);
+                        //Status.refresh.resume();
+                        //link.removeClass('reloading')
+                        //    .find('.js-text')
+                        //    .text('Poll Now');
+                    });
+            } else {
+                window.location.reload(true);
+            }
             e.preventDefault();
         }).on('click', '.issues-button', function (e) {
             $(this).parent('.issues-list').toggleClass('active');
             e.preventDefault();
-        }).on('click', '.issues-list', function (e) {
+        }).on('click', '.issues-list, .action-popup', function (e) {
             e.stopPropagation();
-        }).on('click', function () {
-            $('.issues-list').removeClass('active');
+        }).on({
+            'click': function () {
+                $('.issues-list').removeClass('active');
+                $('.action-popup').remove();
+            },
+            'show': function () {
+                resumeRefresh();
+            },
+            'hide': function () {
+                pauseRefresh();
+            }
         });
         prepTableSorter();
     }
@@ -202,7 +321,14 @@ window.Status = (function () {
         showSummaryPopup: showSummaryPopup,
         summaryPopup: summaryPopup,
         resizePopup: resizePopup,
-        ajaxLoaders: ajaxLoaders
+        ajaxLoaders: ajaxLoaders,
+        refresh: {
+            register: registerRefresh,
+            pause: pauseRefresh,
+            resume: resumeRefresh,
+            run: runRefresh,
+            registered: registeredRefreshes
+        }
     };
 
 })();
@@ -220,33 +346,6 @@ Status.UI = (function () {
 
 Status.Dashboard = (function () {
     
-    var refreshTimer;
-
-    function refresh() {
-        $.ajax(Status.Dashboard.options.refreshUrl || window.location.href, {
-            data: $.extend({}, Status.Dashboard.options.refreshData, { ajax: true }),
-            cache: false
-        }).done(function(html) {
-            var serverGroups = $('.node-group[data-name], .node-header[data-name], .refresh-group[data-name]', html);
-            $('.node-group[data-name], .node-header[data-name], .refresh-group[data-name]').each(function() {
-                var name = $(this).data('name'),
-                    match = serverGroups.filter('[data-name="' + name + '"]');
-                if (!match.length) {
-                    console.log('Unable to find: ' + name + '.');
-                } else {
-                    $(this).replaceWith(match);
-                }
-            });
-            $('.cluster-sub-detail').replaceWith($(html).filter('.cluster-sub-detail'));
-            if (Status.Dashboard.options.filter)
-                applyFilter(Status.Dashboard.options.filter);
-            if (Status.Dashboard.options.afterRefresh)
-                Status.Dashboard.options.afterRefresh();
-        }).always(function() {
-            refreshTimer = setTimeout(refresh, Status.Dashboard.options.refresh * 1000);
-        }).fail(function () { console.log(this, arguments); });//Status.UI.ajaxError);
-    }
-
     function applyFilter(filter) {
         Status.Dashboard.options.filter = filter = (filter || '').toLowerCase();
         if (!filter) {
@@ -270,7 +369,28 @@ Status.Dashboard = (function () {
         Status.Dashboard.options = options;
 
         if (options.refresh) {
-            refreshTimer = setTimeout(refresh, options.refresh * 1000);
+            Status.refresh.register("Dashboard", function () {
+                return $.ajax(Status.Dashboard.options.refreshUrl || window.location.href, {
+                    data: $.extend({}, Status.Dashboard.options.refreshData),
+                    cache: false
+                }).done(function (html) {
+                    var serverGroups = $('.node-group[data-name], .node-header[data-name], .refresh-group[data-name]', html);
+                    $('.node-group[data-name], .node-header[data-name], .refresh-group[data-name]').each(function () {
+                        var name = $(this).data('name'),
+                            match = serverGroups.filter('[data-name="' + name + '"]');
+                        if (!match.length) {
+                            console.log('Unable to find: ' + name + '.');
+                        } else {
+                            $(this).replaceWith(match);
+                        }
+                    });
+                    $('.cluster-sub-detail').replaceWith($(html).filter('.cluster-sub-detail'));
+                    if (Status.Dashboard.options.filter)
+                        applyFilter(Status.Dashboard.options.filter);
+                    if (Status.Dashboard.options.afterRefresh)
+                        Status.Dashboard.options.afterRefresh();
+                }).fail(function () { console.log(this, arguments); });
+            }, Status.Dashboard.options.refresh * 1000);
         }
 
         $('.node-dashboard').on('click', '.dashboard-spark', function() {
@@ -310,7 +430,7 @@ Status.Dashboard = (function () {
             applyFilter(this.value);
         });
         if (Status.Dashboard.options.filter)
-            $('.node-cagtegory-list .filter-box input').keyup();
+            $('.node-category-list .filter-box input').keyup();
     }
 
     return {
@@ -419,7 +539,7 @@ Status.Elastic = (function () {
         Status.Elastic.options = options;
 
         $.extend(Status.ajaxLoaders, {
-            '#/elastic/summary/': function(val) {
+            '#/elastic/summary/': function (val) {
                 Status.Dashboard.options.refreshData = { popup: val };
                 Status.summaryPopup('/elastic/node/summary/' + val, options, false, function() {
                     Status.Dashboard.options.refreshData = {};
@@ -481,7 +601,7 @@ Status.NodeSearch = (function () {
         $('.server-search').on('click', '.js-show-all-down', function () {
             $(this).siblings('.hidden').removeClass('hidden').end().remove();
         });
-        $('.node-cagtegory-list').on('click', '.filters-current', function (e) {
+        $('.node-category-list').on('click', '.filters-current', function (e) {
             if (e.target.tagName != 'INPUT') $('.filters, .filters-toggle').toggle();
         }).on('keyup', '.filter-form', function (e) {
             if (e.keyCode === 13) {
@@ -509,7 +629,6 @@ Status.SQL = (function () {
         };
         var wrap = Status.getPopup();
         wrap.load('/sql/servers', $.extend({}, Status.Dashboard.options.refreshData, {
-            ajax: true,
             detailOnly: true
         }), function () {
             Status.showSummaryPopup(function () {
@@ -518,10 +637,13 @@ Status.SQL = (function () {
         });
     }
 
-    function loadPlan(handle) {
+    function loadPlan(val) {
+        var parts = val.split('/'),
+            handle = parts[0],
+            offset = parts.length > 1 ? parts[1] : null;
         $('.sql-server .plan-row[data-plan-handle="' + handle + '"]').addClass('selected');
         var wrap = Status.getPopup();
-        wrap.load('/sql/top/detail', { node: Status.SQL.options.node, handle: handle }, function() {
+        wrap.load('/sql/top/detail', { node: Status.SQL.options.node, handle: handle, offset: offset }, function() {
             $('.query-col').removeClass('loading');
             Status.showSummaryPopup(function () { $('.plan-row.selected').removeClass('selected'); });
             prettyPrint();
@@ -594,11 +716,13 @@ Status.SQL = (function () {
         });        
         
         $('.sql-server').on('click', '.plan-row', function() {
-            var handle = $(this).data('plan-handle');
+            var $this = $(this),
+                handle = $this.data('plan-handle'),
+                offset = $this.data('offset');
             if (!handle) return;
-            window.location.hash = '#/plan/' + handle;
+            window.location.hash = '#/plan/' + handle + (offset ? '/' + offset : '');
             $('.plan-row.selected').removeClass('selected');
-            $(this).addClass('selected').find('.query-col').addClass('loading');
+            $this.addClass('selected').find('.query-col').addClass('loading');
         }).on('click', '.filters-current', function () {
             $('.filters').fadeToggle();
         }).on('keyup', '.filter-form', function (e) {
@@ -652,9 +776,18 @@ Status.Redis = (function () {
         Status.Redis.options = options;
 
         $.extend(Status.ajaxLoaders, {
-            '#/redis/summary/': function (val) {
-                Status.summaryPopup('/redis/instance/summary/' + val, { node: Status.Redis.options.node, port: Status.Redis.options.port });
+            '#/redis/summary/': function(val) {
+                Status.summaryPopup('/redis/instance/summary/' + val, { node: Status.Redis.options.node + ':' + Status.Redis.options.port });
             }
+        });
+
+        $('#content').on('click', '.js-redis-role-action', function (e) {
+            var link = this;
+            Status.refresh.pause("Dashboard");
+            $.get('redis/instance/actions/role', { node: $(this).data('node') }, function (data) {
+                $(link).parent().actionPopup(data);
+            });
+            e.preventDefault();
         });
         
         $('<div class="expand">show all</div>').click(function () {
@@ -669,65 +802,6 @@ Status.Redis = (function () {
 })();
 
 Status.Exceptions = (function () {
-    
-    function saveState() {
-        //if (window.history.pushState)
-        //  window.history.pushState({}, document.title, window.location.href + "#" + new Date().getTime());
-    }
-
-    function refresh() {
-        $.ajax(window.location.href, {
-            data: { ajax: true },
-            success: function (html) {
-                var newPage = $(html),
-                    newHeader = $('.top-server-list', newPage),
-                    newRows = $('.exceptions-dashboard > tbody > tr', newPage),
-                    newDB = $('.exceptions-dashboard', newPage),
-                    newCount = newDB.data('total-count'),
-                    newTitle = newDB.data('title');
-                $('.exception-count').text(newCount);
-                $('.exception-title').text(newTitle);
-                if (newTitle) document.title = Status.options.SiteName ? newTitle + ' - ' + Status.options.SiteName : newTitle;
-                $('.top-server-list').replaceWith(newHeader);
-                $('.exceptions-dashboard tbody').empty().append(newRows);
-                var table = $('.exceptions-dashboard').trigger('update', [true]);
-                if (Status.Exceptions.options.currentSort)
-                    table.trigger('sorton', [Status.Exceptions.options.currentSort]);
-            },
-            error: Status.UI.ajaxError,
-            complete: function () {
-                saveState();
-                setTimeout(refresh, Status.Exceptions.options.refresh * 1000);
-            }
-        });
-    }
-
-    function setupSorting() {
-        var titleRow = $('table.exceptions-dashboard > thead tr.category-row').remove();
-
-        var allHeaders = {
-            0: { sorter: false },
-            1: { sorter: 'dataVal' },
-            2: { sorter: 'linkText' },
-            3: { sorter: 'linkText' },
-            8: { sorter: 'errorCount' }
-        };
-        var appHeaders = {
-            0: { sorter: false },
-            1: { sorter: 'dataVal' },
-            3: { sorter: 'linkText' },
-            8: { sorter: 'errorCount' }
-        };
-
-        // allow sorting
-        $('table.exceptions-dashboard').tablesorter({
-            headers: Status.Exceptions.options.log ? appHeaders : allHeaders
-        }).on('sortEnd', function (e) {
-            Status.Exceptions.options.currentSort = e.target.config.sortList;
-        });
-
-        titleRow.prependTo($('table.exceptions-dashboard > thead '));
-    }
 
     function refreshCounts(data) {
         if (!data.length) return;
@@ -742,15 +816,15 @@ Status.Exceptions = (function () {
                 .parent()
                 .attr('title', app ? (app.ExceptionCount + ' Exception' + (app.ExceptionCount == 1 ? '' : 's') + (app.MostRecent ? ', Last: ' + app.MostRecent : '')) : '0 Exceptions')
                 .siblings('span.count')
-                .text(app && app.ExceptionCount ? ' (' + app.ExceptionCount + ')' : '');
+                .text(app && app.ExceptionCount ? ' (' + app.ExceptionCount.toLocaleString() + ')' : '');
         });
         if (Status.Exceptions.options.search) return;
         var log = Status.Exceptions.options.log;
         if (log) {
             var count = apps[log].ExceptionCount;
-            $('.exception-title').text(count + ' ' + log + ' Exception' + (count != 1 ? 's' : ''));
+            $('.exception-title').text(count.toLocaleString() + ' ' + log + ' Exception' + (count != 1 ? 's' : ''));
         } else {
-            $('.exception-title').text(total + ' Exception' + (total != 1 ? 's' : ''));
+            $('.exception-title').text(total.toLocaleString() + ' Exception' + (total != 1 ? 's' : ''));
         }
         $('.tabs-links .count.exception-count').text(total);
     }
@@ -758,9 +832,67 @@ Status.Exceptions = (function () {
     function init(options) {
         Status.Exceptions.options = options;
 
-        if (options.refresh) {
-            setTimeout(refresh, options.refresh * 1000);
+        function getLoadCount() {
+            // If scrolled back to the top, load 500
+            if ($(window).scrollTop() == 0) {
+                return 500;
+            }
+            return Math.max($('.exceptions-dashboard tbody tr').length, 500);
         }
+
+        if (options.refresh) {
+            Status.refresh.register("Status.Exceptions", function () {
+                return $.ajax(window.location.href, {
+                    data: { sort: options.sort, count: getLoadCount() },
+                    cache: false
+                }).done(function (html) {
+                    var newPage = $(html),
+                        newHeader = $('.top-server-list', newPage),
+                        newRows = $('.exceptions-dashboard > tbody > tr', newPage),
+                        newDB = $('.exceptions-dashboard', newPage),
+                        newCount = newDB.data('total-count'),
+                        newTitle = newDB.data('title');
+                    $('.exception-count').text((+newCount).toLocaleString());
+                    $('.exception-title').text(newTitle);
+                    if (newTitle) document.title = Status.options.SiteName ? newTitle + ' - ' + Status.options.SiteName : newTitle;
+                    $('.top-server-list').replaceWith(newHeader);
+                    $('.exceptions-dashboard tbody').empty().append(newRows);
+                }).fail(Status.UI.ajaxError);
+            }, Status.Exceptions.options.refresh * 1000);
+        }
+
+        var loadingMore = false,
+            allDone = false;
+
+        function loadMore() {
+            if (loadingMore || allDone) return;
+
+            if ($(window).scrollTop() + $(window).height() > $(document).height() - 100) {
+                // TODO: loading indicator
+                loadingMore = true;
+                $('.loading-more-spacer').show();
+                var lastGuid = $('.exceptions-dashboard tr.error').last().data('id');
+                $.ajax('/exceptions/load-more', {
+                    data: { log: options.log, sort: options.sort, count: options.loadMore, prevLast: lastGuid },
+                    cache: false
+                }).done(function (html) {
+                    var newRows = $(html).filter('tr');
+                    $('.exceptions-dashboard tbody').append(newRows);
+                    $('.loading-more-spacer').hide();
+                    if (newRows.length < options.loadMore) {
+                        allDone = true;
+                        $('.no-more').fadeIn();
+                    }
+                    loadingMore = false;
+                });
+            }
+        }
+
+        if (options.loadMore) {
+            allDone = $('.exceptions-dashboard tbody tr.error').length < 250;
+            $(document).on('scroll exception-deleted', loadMore);
+        }
+
 
         // ajax the error deletion on the list page
         $('.bottom-section').on('click', '.exceptions-dashboard a.delete-link', function () {
@@ -796,8 +928,8 @@ Status.Exceptions = (function () {
                         jRow.closest('tr').remove();
                         table.trigger('update', [true]);
                         refreshCounts(data);
+                        $(document).trigger('exception-deleted');
                     }
-                    saveState();
                 },
                 error: function (xhr) {
                     $(this).attr('href', url);
@@ -823,7 +955,6 @@ Status.Exceptions = (function () {
                            .end().replaceWith('<span title="This error is protected" class="protected"></span>');
                     jRow.addClass('protected').removeClass('deleted');
                     refreshCounts(data);
-                    saveState();
                 },
                 error: function (xhr) {
                     $(this).attr('href', url);
@@ -866,8 +997,8 @@ Status.Exceptions = (function () {
                     lastSelected = row.first();
                 }
             });
-            $(document).keyup(function(e) {
-                if (e.keyCode == 46) {
+            $(document).keydown(function(e) {
+                if (e.keyCode == 46 || e.keyCode == 8) {
                     var selected = $('.error.selected').not('.protected');
                     if (selected.length > 0) {
                         var ids = selected.map(function () { return $(this).data('id'); }).get();
@@ -890,6 +1021,7 @@ Status.Exceptions = (function () {
                                 selected.last().children().first().errorPopupFromJSON(xhr, 'An error occurred clearing selected exceptions');
                             }
                         });
+                        return false;
                     }
                 }
             });
@@ -950,8 +1082,6 @@ Status.Exceptions = (function () {
             type: 'numeric'
         });
 
-        setupSorting();
-
         /* Error previews */
         if (options.enablePreviews) {
             var previewTimer = 0;
@@ -996,6 +1126,43 @@ Status.Exceptions = (function () {
             });
             return false;
         });
+
+        /* Jira action handlers*/
+        $('.info-jira-action-link a').on('click', function () {
+            $(this).addClass('loading');
+            var actionid = $(this).data("actionid");
+            $.ajax({
+                type: 'POST',
+                data: { id: options.id, log: options.log, actionid: actionid },
+                context: this,
+                url: '/exceptions/jiraaction',
+                success: function (data) {
+                    $(this).removeClass('loading');
+                    if (data.success == true) {
+                        if (data.browseUrl != null && data.browseUrl != "") {
+
+                            var issueLink = '<a href="' + data.browseUrl + '" target="_blank">' + data.issueKey + '</a>';
+                            $("#jira-links-container").show();
+                            $("#jira-links-container").append('<span> ( ' + issueLink + ' ) </span>')
+                            toastr.success('<div style="margin-top:5px">' + issueLink + '</div>', 'Issue Created')
+                        }
+                        else {
+                            toastr.success("Issue created : " + data.issueKey, 'Success')
+                        }
+
+                    }
+                    else {
+                        toastr.error(data.message, 'Error')
+                    }
+
+                },
+                error: function () {
+                    $(this).removeClass('loading').parent().errorPopup('An error occured while trying to perform the selected Jira issue action.');
+                }
+            });
+            return false;
+        });
+
     }
 
     return {
@@ -1040,54 +1207,41 @@ Status.Graphs = (function () {
 })();
 
 Status.HAProxy = (function () {
-    var refreshTimeout,
-        refreshRequest,
-        refreshLink;
-
-    function refresh() {
-        clearTimeout(refreshTimeout);
-        refreshRequest = $.ajax({
-            url: window.location.pathname,
-            data: { group: Status.HAProxy.options.group, proxy: Status.HAProxy.options.proxy },
-            success: function (html) {
-                var proxies = $('.proxies-wrap, .dashboard-wrap', html);
-                $('.proxies-wrap, .dashboard-wrap').replaceWith(proxies);
-                refreshLink.detach();
-                var header = $('.node-cagtegory-list.top-section', html);
-                $('.node-cagtegory-list.top-section').replaceWith(header);
-                $('.refresh-link').replaceWith(refreshLink);
-                //toastr.clear();
-            },
-            error: function (xhr) {
-                toastr.error((xhr.responseText ? 'There was an error loading: ' + xhr.responseText : 'Unknwon error refreshing') + ' at ' + new Date(),
-                    "Problem refreshing",
-                    {
-                        positionClass: "toast-bottom-full-width",
-                        timeOut: (Status.HAProxy.options.refresh || 5) * 1000 - 1000
-                    });
-            },
-            complete: function () {
-                refreshTimeout = setTimeout(refresh, (Status.HAProxy.options.refresh || 5) * 1000);
-            }
-        });
-    }
+    var refreshLink;
 
     function init(options) {
         Status.HAProxy.options = options;
 
         if (options.refresh) {
-            refreshTimeout = setTimeout(refresh, options.refresh * 1000);
+            Status.refresh.register("Status.HAProxy", function () {
+                return $.ajax(window.location.pathname, {
+                    data: { group: Status.HAProxy.options.group, watch: Status.HAProxy.options.proxy },
+                }).done(function (html) {
+                    var proxies = $('.proxies-wrap, .dashboard-wrap', html);
+                    $('.proxies-wrap, .dashboard-wrap').replaceWith(proxies);
+                    refreshLink.detach();
+                    var header = $('.node-category-list.top-section', html);
+                    $('.node-category-list.top-section').replaceWith(header);
+                    $('.refresh-link').replaceWith(refreshLink);
+                }).fail(function (xhr) {
+                    toastr.error((xhr.responseText ? 'There was an error loading: ' + xhr.responseText : 'Unknwon error refreshing') + ' at ' + new Date(),
+                        "Problem refreshing",
+                        {
+                            positionClass: "toast-bottom-full-width",
+                            timeOut: (Status.HAProxy.options.refresh || 5) * 1000 - 1000
+                        });
+                });
+            }, (Status.HAProxy.options.refresh || 5) * 1000);
         }
 
         refreshLink = $('.refresh-link');
         
         function stopRefresh() {
-            clearTimeout(refreshTimeout);
-            if (refreshRequest) refreshRequest.abort();
+            Status.refresh.pause();
             refreshLink.text('Enable Refresh');
         }
         function startRefresh() {
-            refresh();
+            Status.refresh.resume();
             refreshLink.text('Disable Refresh');
         }
 
@@ -1123,7 +1277,7 @@ Status.HAProxy = (function () {
                 url: '/haproxy/admin/proxy',
                 success: function (data) {
                     if (data === true) {
-                        refresh();
+                        startRefresh();
                     } else {
                         stopRefresh();
                     }
@@ -1154,7 +1308,7 @@ Status.HAProxy = (function () {
                 url: '/haproxy/admin/' + (server ? 'server' : 'group'),
                 success: function (data) {
                     if (data === true) {
-                        refresh();
+                        startRefresh();
                     } else {
                         stopRefresh();
                     }
@@ -1239,13 +1393,24 @@ Status.HAProxy = (function () {
         appendLoading: function () {
             return this.append('<img src="/Content/img/loading.gif" alt="Loading..." />');
         },
-        errorPopup: function (msg, callback) {
-            $('.error-popup').remove();
-            var jDiv = $('<div class="error-popup">' + msg + '</div>').appendTo(this);
-            var remove = function () { jDiv.fadeOut('fast', function() { $(this).remove(); }); if (callback) callback(); };
-            jDiv.on('click', remove).fadeIn('fast');
-            setTimeout(remove, 15000);
+        inlinePopup: function (className, msg, callback, removeTimeout, clickDismiss) {
+            $('.' + className).remove();
+            var jDiv = $('<div class="' + className + '">' + msg + '</div>').appendTo(this);
+            jDiv.fadeIn('fast');
+            var remove = function () { jDiv.fadeOut('fast', function () { $(this).remove(); }); if (callback) callback(); };
+            if (clickDismiss) {
+                jDiv.on('click', remove);
+            }
+            if (removeTimeout) {
+                setTimeout(remove, removeTimeout);
+            }
             return this;
+        },
+        actionPopup: function (msg, callback) {
+            return this.inlinePopup('action-popup', msg, callback);
+        },
+        errorPopup: function (msg, callback) {
+            return this.inlinePopup('error-popup', msg, callback, 15000, true);
         },
         errorPopupFromJSON: function (xhr, defaultMsg) {
             var msg = defaultMsg;

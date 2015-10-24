@@ -2,7 +2,7 @@
 using System.Net;
 using System.Web.WebPages;
 using System.Web.Mvc;
-using Newtonsoft.Json;
+using Jil;
 using StackExchange.Opserver.Views.Shared;
 using StackExchange.Profiling;
 using StackExchange.Opserver.Helpers;
@@ -14,7 +14,8 @@ namespace StackExchange.Opserver.Controllers
     [OnlyAllow(Roles.Authenticated)]
     public partial class StatusController : Controller
     {
-        protected virtual ISecurableSection SettingsSection { get { return null; } }
+        protected virtual ISecurableSection SettingsSection => null;
+        protected virtual string TopTab => null;
 
         private IDisposable _betweenInitializeAndActionExecuting,
                             _betweenActionExecutingAndExecuted,
@@ -22,7 +23,7 @@ namespace StackExchange.Opserver.Controllers
                             _betweenResultExecutingAndExecuted;
 
         private readonly Func<string, IDisposable> _startStep = name => MiniProfiler.Current.Step(name);
-        private readonly Action<IDisposable> _stopStep = s => { if (s != null) s.Dispose(); };
+        private readonly Action<IDisposable> _stopStep = s => s?.Dispose();
         
         protected override void Initialize(System.Web.Routing.RequestContext requestContext)
         {
@@ -36,6 +37,7 @@ namespace StackExchange.Opserver.Controllers
             {
                 _stopStep(_betweenInitializeAndActionExecuting);
                 _betweenActionExecutingAndExecuted = _startStep("OnActionExecuting");
+                TopTabs.CurrentTab = TopTab;
             }
 
             var iSettings = SettingsSection as Settings;
@@ -135,11 +137,6 @@ namespace StackExchange.Opserver.Controllers
             var pageTitle = string.IsNullOrEmpty(title) ? SiteSettings.SiteName : string.Concat(title, " - ", SiteSettings.SiteName);
             ViewData[ViewDataKeys.PageTitle] = pageTitle;
         }
-
-        public void SetMainTab(MainTab tab)
-        {
-            ViewData[ViewDataKeys.MainTab] = tab;
-        }
         
         /// <summary>
         /// returns ContentResult with the parameter 'content' as its payload and "text/plain" as media type.
@@ -169,7 +166,7 @@ namespace StackExchange.Opserver.Controllers
 
         protected ContentResult JsonRaw(object content)
         {
-            return new ContentResult { Content = (content != null ? content.ToString() : null), ContentType = "application/json" };
+            return new ContentResult { Content = content?.ToString(), ContentType = "application/json" };
         }
 
         public new JsonNetResult Json(object data)
@@ -183,15 +180,15 @@ namespace StackExchange.Opserver.Controllers
             return Json(toSerialize);
         }
 
-        protected JsonNetResult JsonError(string message)
+        protected JsonNetResult JsonError(string message, HttpStatusCode? status = null)
         {
-            Response.StatusCode = (int)HttpStatusCode.BadRequest;
+            Response.StatusCode = (int)(status ?? HttpStatusCode.InternalServerError);
             return Json(new { ErrorMessage = message });
         }
 
-        protected JsonNetResult JsonError(object toSerialize)
+        protected JsonNetResult JsonError(object toSerialize, HttpStatusCode? status = null)
         {
-            Response.StatusCode = (int)HttpStatusCode.BadRequest;
+            Response.StatusCode = (int)(status ?? HttpStatusCode.InternalServerError);
             return Json(toSerialize);
         }
 
@@ -200,13 +197,13 @@ namespace StackExchange.Opserver.Controllers
             public override void ExecuteResult(ControllerContext context)
             {
                 if (context == null)
-                    throw new ArgumentNullException("context");
+                    throw new ArgumentNullException(nameof(context));
 
                 var response = context.HttpContext.Response;
                 response.ContentType = ContentType.HasValue() ? ContentType : "application/json";
                 if (ContentEncoding != null) response.ContentEncoding = ContentEncoding;
 
-                var serializedObject = JsonConvert.SerializeObject(Data, Formatting.Indented);
+                var serializedObject = JSON.Serialize(Data);
                 response.Write(serializedObject);
             }
         }

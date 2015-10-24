@@ -7,8 +7,8 @@ namespace StackExchange.Opserver.Models.Security
 {
     public abstract class SecurityProvider
     {
-        public virtual bool IsAdmin { get { return InGroups(SiteSettings.AdminGroups); } }
-        public virtual bool IsViewer { get { return InGroups(SiteSettings.ViewGroups); } }
+        public virtual bool IsAdmin => InGroups(SiteSettings.AdminGroups);
+        public virtual bool IsViewer => InGroups(SiteSettings.ViewGroups);
 
         internal virtual bool InReadGroups(ISecurableSection settings)
         {
@@ -25,9 +25,14 @@ namespace StackExchange.Opserver.Models.Security
             if (groupNames.IsNullOrEmpty() || Current.User.AccountName.IsNullOrEmpty()) return false;
             return groupNames == "*" || InGroups(groupNames, Current.User.AccountName);
         }
-
+        
         public abstract bool InGroups(string groupNames, string accountName);
         public abstract bool ValidateUser(string userName, string password);
+
+        public virtual List<string> GetGroupMembers(string groupName)
+        {
+            return new List<string>();
+        }
         public virtual void PurgeCache() { }
 
         public List<IPNet> InternalNetworks;

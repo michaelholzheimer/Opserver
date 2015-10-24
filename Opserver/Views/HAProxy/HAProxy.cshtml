@@ -5,7 +5,6 @@
 @{
     Layout = "~/Views/Shared/Master.cshtml";
     this.SetPageTitle("HAProxy");
-    this.SetMainTab(MainTab.HAProxy);
     var allGroups = HAProxyGroup.AllGroups;
     this.SetTopNodes(HAProxyGroup.AllGroups, "HAProxy Groups", Model.SelectedGroup);
 }
@@ -32,7 +31,7 @@
 @if (Model.IsInstanceFilterable)
 {
     var allProxies = HAProxyGroup.GetAllProxies();
-    <div class="node-cagtegory-list top-section" style="padding-top: 8px;">
+    <div class="node-category-list top-section" style="padding-top: 8px;">
         <ul class="top-server-list">
             <li>Instances: </li>
             @{ var ac = Model.SelectedGroup == null ? @" class=""selected""" : ""; }

@@ -2,8 +2,8 @@
 @using Roles = StackExchange.Opserver.Models.Roles
 @model StackExchange.Opserver.Views.Redis.DashboardModel
 @{
-    Layout = null;
     var i = Model.CurrentInstance;
+    if (i == null) { return; }
 }
 <style>
     .sub-header {
@@ -13,11 +13,6 @@
         padding-top: 8px;
         padding-bottom: 2px;
         font-weight: bold;
-    }
-    .summary-links {
-        padding: 4px;
-        border-bottom: solid 1px #eee;
-        margin-bottom: 4px;
     }
     .section-wrap .warning-row td {
         text-align: center;
@@ -37,8 +32,10 @@
     else
     {
     <div class="summary-dashboard">
-        <h3 class="header"><a href="/redis">Redis</a><span class="note">:</span> @i.Host<span class="note">: </span> @i.Port (@i.Name)
-            <a class="top-right-nav" href="/redis/server?node=@i.Host">View Raw</a>
+        <h3 class="header">
+            <a href="/redis">Redis</a><span class="note">:</span> @i.IconSpan() @i.Host<span class="note">: </span> @i.Port (@i.Name)
+            <span class="note smaller">(<a href="/redis/server?node=@i.Host">View Raw</a>)</span>
+            @Helpers.PollNow(i)
         </h3>
         <div class="left-col">
             <div class="section-wrap refresh-group" data-name="instance-summary">
@@ -60,7 +57,11 @@
                         </tr>
                         <tr>
                             <td>Version</td>
-                            <td>@info.Server.Version</td>
+                            <td>
+                                @info.Server.Version
+                                <span class="note">(</span><a href="#/redis/summary/config">view config</a><span class="note">)</span>
+                                <span class="note">(</span><a href="/redis/instance/get-config/@i.Host-@i.Port-config.zip">download</a><span class="note">)</span>
+                            </td>
                         </tr>
                         <tr>
                             <td>Uptime</td>
@@ -68,7 +69,18 @@
                         </tr>
                         <tr>
                             <td>Role</td>
-                            <td>@i.Role.GetDescription()</td>
+                            <td>
+                                @i.Role.GetDescription()
+                                @if (i.IsSlave)
+                                {
+                                    var offset = i.Master.Replication.MasterReplicationOffset - i.Replication.SlaveReplicationOffset;
+                                    if (offset > 0)
+                                    {
+                                        <span class="note">(@offset.ToSize() behind)</span>
+                                    }
+                                }
+                            </td>
+
                         </tr>
                         <tr>
                             <td>Slaves</td>
@@ -90,21 +102,43 @@
                                         </div>
                                     }
                                     <div class="redis-instance">
-                                        @i.IconSpan() <a href="?node=@i.Host&port=:@i.Port">@i.Host:@i.Port</a> <span class="note">(Current)</span>
+                                        @i.IconSpan() <a href="?node=@i.Host:@i.Port">@i.Host:@i.Port</a> <span class="note">(Current)</span>
                                     </div>
                                     var slaves = i.SlaveInstances;
                                     if (slaves.Count > 0)
                                     {
-                                        foreach (var s in slaves)
-                                        {
-                                            <div class="redis-instance">
-                                                @s.IconSpan() <a href="?node=@s.Host:@s.Port">@s.Host:@s.Port</a> <span class="note">(Slave)</span>
-                                            </div>
-                                        }
+                                        <div class="redis-instance">
+                                            @foreach (var s in slaves)
+                                            {
+                                                <div>
+                                                    @s.IconSpan() <a href="?node=@s.Host:@s.Port">@s.Host:@s.Port</a> <span class="note">(Slave)</span>
+                                                </div>
+                                            }
+                                        </div>
                                     }
                                 } 
                             </td>
                         </tr>
+                        <tr>
+                            <td>SE.Redis Tiebreaker</td>
+                            <td>
+                                @if (i.Tiebreaker.HasData())
+                                {
+                                    @i.Tiebreaker.Data
+                                }
+                                else
+                                {
+                                    <span class="note">not set</span>
+                                }
+                            </td>
+                        </tr>
+                        @if (i.Replication != null && i.Replication.BacklogActive)
+                        {
+                            <tr>
+                                <td>Backlog</td>
+                                <td>@i.Replication.BacklogHistoryLength.ToHumanReadableSize() / @i.Replication.BacklogSize.ToHumanReadableSize()</td>
+                            </tr>
+                        }
                         @if (i.Role == RedisInfo.RedisInstanceRole.Slave)
                         {
                             <tr>
@@ -171,7 +205,7 @@
                             </tr>
                         }
                         <tr>
-                            <td>Change since last save</td>
+                            <td>Changes since last save</td>
                             <td>@info.Persistence.RDBChangesSinceLastSave.ToComma()</td>
                         </tr>
                         <tr>
@@ -220,7 +254,7 @@
                 </table> 
             </div>
             <div class="section-wrap refresh-group" data-name="instance-keyspace">
-                <div class="summary-section-header">Keyspace</div>
+                <div class="summary-section-header">Keyspace <span class="note">(@info.Keyspace.KeyData.Sum(k => k.Value.Keys).ToComma() keys)</span></div>
                 <table>
                     <thead>
                         <tr>
@@ -282,22 +316,20 @@
                 </table> 
             </div>
             
-            @if (i.Clients.Data == null)
-            {
-                <div class="section-wrap refresh-group" data-name="instance-clients">
+            <div class="section-wrap refresh-group" data-name="instance-clients">
+                @if (i.Clients.Data == null)
+                {
                     <div class="summary-section-header">Clients</div>
                     <div class="no-content">No Client Connection Data</div>
-                </div>
-            }
-            else
-            {
-                var clients = i.Clients.Data;
-                <div class="section-wrap refresh-group" data-name="instance-clients">
+                }
+                else
+                {
+                    var clients = i.Clients.Data;
                     <div class="summary-section-header">Clients <a class="top-right-nav" href="#/redis/summary/clients">View All</a></div>
                     <table>
                         <tbody>
-                            @{ 
-                                var ips = clients.Select(c => c.Address.Split(StringSplits.Colon).First()).GroupBy(ip => ip).ToList(); 
+                            @{
+                                var ips = clients.Select(c => c.Host).GroupBy(ip => ip).ToList();
                                 if (ips.Any())
                                 {
                                     <tr>
@@ -329,8 +361,46 @@
                             }
                         </tbody>
                     </table>
-                </div>
-            }
+                }
+            </div>
+            <div class="section-wrap refresh-group" data-name="instance-slow-log">
+                @if (i.SlowLog.HasData() && i.SlowLog.Data.Any())
+                {
+                    <div class="summary-section-header">Slow Command Log <a class="top-right-nav" href="#/redis/summary/slow-log">View All</a></div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Command</th>
+                                <th>Duration</th>
+                                <th>When</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var entry in i.SlowLog.Data.Take(40))
+                            {
+                                <tr data-id="@entry.UniqueId">
+                                    <td>
+                                        <a href="@entry.GetHelpUrl()" target="_blank">@entry.TraceDescription(60)</a>
+                                    </td>
+                                    <td>@entry.Duration.ToTimeStringMini(3)</td>
+                                    <td>@entry.Time.ToRelativeTimeSpan()</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                else
+                {
+                    <div class="summary-section-header">Slow Command Log</div>
+                    <div class="no-content">
+                        No slow commands in the log
+                        @if (!i.IsSlowLogEnabled)
+                        {
+                            <div>Slow log is not enabled</div>
+                        }
+                    </div>
+                }
+            </div>
         </div>
     </div>
     }

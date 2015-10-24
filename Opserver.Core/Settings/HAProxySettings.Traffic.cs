@@ -9,7 +9,7 @@ namespace StackExchange.Opserver
         private HAProxyTrafficSettings _traffic;
         public HAProxyTrafficSettings Traffic
         {
-            get { return _traffic; }
+            get { return _traffic ?? (_traffic = new HAProxyTrafficSettings()); }
             set
             {
                 _traffic = value;
@@ -20,11 +20,17 @@ namespace StackExchange.Opserver
 
         public class HAProxyTrafficSettings
         {
-            public bool Enabled { get { return Connections.Any(); } }
+            public bool Enabled => Connections.Any();
+
             /// <summary>
             /// Connections for
             /// </summary>
             public List<Connection> Connections { get; set; }
+
+            public HAProxyTrafficSettings()
+            {
+                Connections = new List<Connection>();
+            }
         }
 
         public class Connection : ISettingsCollectionItem<Connection>
@@ -59,8 +65,8 @@ namespace StackExchange.Opserver
             {
                 unchecked
                 {
-                    return ((Name != null ? Name.GetHashCode() : 0)*397)
-                           ^ (ConnectionString != null ? ConnectionString.GetHashCode() : 0);
+                    return ((Name?.GetHashCode() ?? 0)*397)
+                           ^ (ConnectionString?.GetHashCode() ?? 0);
                 }
             }
         }

@@ -4,7 +4,7 @@ using System.Data.Common;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
-using Dapper;
+using System.Threading.Tasks;
 using StackExchange.Opserver.Helpers;
 using StackExchange.Opserver.Data.Dashboard;
 
@@ -13,8 +13,9 @@ namespace StackExchange.Opserver.Data.SQL
     public partial class SQLInstance : PollNode, ISearchableNode
     {
         public string Name { get; internal set; }
-        public string CategoryName { get { return "SQL"; } }
-        string ISearchableNode.DisplayName { get { return Name; } }
+        public string ObjectName { get; internal set; }
+        public string CategoryName => "SQL";
+        string ISearchableNode.DisplayName => Name;
         protected string ConnectionString { get; set; }
         public Version Version { get; internal set; }
         public static Dictionary<Type, ISQLVersionedObject> VersionSingletons;
@@ -36,10 +37,12 @@ namespace StackExchange.Opserver.Data.SQL
             }
         }
 
-        public SQLInstance(string name, string connectionString) : base(name)
+        public SQLInstance(string name, string connectionString, string objectName) : base(name)
         {
             Version = new Version(); // default to 0.0
             Name = name;
+            // TODO: Object Name regex for not SQLServer but InstanceName, e.g. "MSSQL$MyInstance" from "MyServer\\MyInstance"
+            ObjectName = objectName.IsNullOrEmptyReturn(objectName, "SQLServer");
             ConnectionString = connectionString.IsNullOrEmptyReturn(Current.Settings.SQL.DefaultConnectionString.Replace("$ServerName$", name));
         }
 
@@ -50,20 +53,26 @@ namespace StackExchange.Opserver.Data.SQL
                        : AllInstances.FirstOrDefault(i => i.Name.ToLower() == name.ToLower());
         }
 
-        public override string NodeType { get { return "SQL"; } }
-        public override int MinSecondsBetweenPolls { get { return 2; } }
+        public override string NodeType => "SQL";
+        public override int MinSecondsBetweenPolls => 2;
 
         public override IEnumerable<Cache> DataPollers
         {
             get
             {
                 yield return ServerProperties;
+                yield return Configuration;
                 yield return Databases;
                 yield return DatabaseBackups;
+                yield return DatabaseFiles;
                 yield return DatabaseVLFs;
                 yield return CPUHistoryLastHour;
                 yield return JobSummary;
                 yield return PerfCounters;
+                yield return MemoryClerkSummary;
+                yield return ServerFeatures;
+                yield return TraceFlags;
+                yield return Volumes;
             }
         }
 
@@ -77,17 +86,14 @@ namespace StackExchange.Opserver.Data.SQL
             return Databases.HasData() ? Databases.Data.GetReasonSummary() : null;
         }
 
-        public Node ServerInfo
-        {
-            get { return DashboardData.GetNodeByName(Name); }
-        }
+        public Node ServerInfo => DashboardData.GetNodeByName(Name);
 
         /// <summary>
         /// Gets a connection for this server - YOU NEED TO DISPOSE OF IT
         /// </summary>
-        protected DbConnection GetConnection(int timeout = 5000)
+        protected Task<DbConnection> GetConnectionAsync(int timeout = 5000)
         {
-            return Connection.GetOpen(ConnectionString, connectionTimeout: timeout);
+            return Connection.GetOpenAsync(ConnectionString, connectionTimeout: timeout);
         }
 
         public string GetFetchSQL<T>() where T : ISQLVersionedObject
@@ -96,7 +102,7 @@ namespace StackExchange.Opserver.Data.SQL
             return VersionSingletons.TryGetValue(typeof (T), out lookup) ? lookup.GetFetchSQL(Version) : null;
         }
 
-        private string GetCacheKey(string itemName) { return string.Format("SQL-Instance-{0}-{1}", Name, itemName); }
+        private string GetCacheKey(string itemName) { return $"SQL-Instance-{Name}-{itemName}"; }
 
         public Cache<List<T>> SqlCacheList<T>(int cacheSeconds,
                                               int? cacheFailureSeconds = null,
@@ -111,7 +117,7 @@ namespace StackExchange.Opserver.Data.SQL
                     AffectsNodeStatus = affectsStatus,
                     CacheForSeconds = cacheSeconds,
                     CacheFailureForSeconds = cacheFailureSeconds,
-                    UpdateCache = UpdateFromSql(typeof (T).Name + "-List", conn => conn.Query<T>(GetFetchSQL<T>()).ToList())
+                    UpdateCache = UpdateFromSql(typeof (T).Name + "-List", conn => conn.QueryAsync<T>(GetFetchSQL<T>()))
                 };
         }
 
@@ -126,18 +132,18 @@ namespace StackExchange.Opserver.Data.SQL
                 {
                     CacheForSeconds = cacheSeconds,
                     CacheFailureForSeconds = cacheFailureSeconds,
-                    UpdateCache = UpdateFromSql(typeof (T).Name + "-Single", conn => conn.Query<T>(GetFetchSQL<T>()).FirstOrDefault())
+                    UpdateCache = UpdateFromSql(typeof (T).Name + "-Single", async conn => (await conn.QueryAsync<T>(GetFetchSQL<T>())).FirstOrDefault())
                 };
         }
 
-        public Action<Cache<T>> UpdateFromSql<T>(string opName, Func<DbConnection, T> getFromConnection) where T : class
+        public Action<Cache<T>> UpdateFromSql<T>(string opName, Func<DbConnection, Task<T>> getFromConnection) where T : class
         {
             return UpdateCacheItem(description: "SQL Fetch: " + Name + ":" + opName,
-                                   getData: () =>
+                                   getData: async () =>
                                        {
-                                           using (var conn = GetConnection())
+                                           using (var conn = await GetConnectionAsync())
                                            {
-                                               return getFromConnection(conn);
+                                               return await getFromConnection(conn);
                                            }
                                        },
                                    addExceptionData: e => e.AddLoggedData("Server", Name));

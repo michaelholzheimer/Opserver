@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Drawing;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Web.Mvc;
 using System.Web.UI.DataVisualization.Charting;
 using StackExchange.Opserver.Data.Dashboard;
@@ -16,15 +17,15 @@ namespace StackExchange.Opserver.Controllers
 
         [OutputCache(Duration = 120, VaryByParam = "id", VaryByContentEncoding = "gzip;deflate", VaryByCustom="highDPI")]
         [Route("graph/cpu/spark"), AlsoAllow(Roles.InternalRequest)]
-        public ActionResult CPUSpark(int id)
+        public async Task<ActionResult> CPUSpark(string id)
         {
-            var node = DashboardData.GetNodeById(id);
-            if (node == null) return ContentNotFound();
-
             var chart = GetSparkChart();
-            var dataPoints = node.GetCPUUtilization(start: DateTime.UtcNow.AddHours(-SparkHours),
-                                                    end: null,
-                                                    pointCount: (int) chart.Width.Value);
+            var dataPoints = await DashboardData.GetCPUUtilization(id, 
+                start: DateTime.UtcNow.AddHours(-SparkHours),
+                end: null,
+                pointCount: (int) chart.Width.Value);
+
+            if (dataPoints == null) return ContentNotFound();
 
             var area = GetSparkChartArea(100);
             var avgCPU = GetSparkSeries("Avg Load");
@@ -43,15 +44,14 @@ namespace StackExchange.Opserver.Controllers
 
         [OutputCache(Duration = 120, VaryByParam = "id", VaryByContentEncoding = "gzip;deflate", VaryByCustom = "highDPI")]
         [Route("graph/memory/spark"), AlsoAllow(Roles.InternalRequest)]
-        public ActionResult MemorySpark(int id)
+        public async Task<ActionResult> MemorySpark(string id)
         {
-            var node = DashboardData.GetNodeById(id);
-            if (node == null) return ContentNotFound();
-
             var chart = GetSparkChart();
-            var dataPoints = node.GetMemoryUtilization(start: DateTime.UtcNow.AddHours(-SparkHours),
-                                                       end: null,
-                                                       pointCount: (int) chart.Width.Value).ToList();
+            var dataPoints = (await DashboardData.GetMemoryUtilization(id,
+                start: DateTime.UtcNow.AddHours(-SparkHours),
+                end: null,
+                pointCount: (int) chart.Width.Value)).ToList();
+
             var maxMem = dataPoints.Max(mp => mp.TotalMemory).GetValueOrDefault();
             var maxGB = (int)Math.Ceiling(maxMem / _gb);
 
@@ -71,17 +71,18 @@ namespace StackExchange.Opserver.Controllers
 
         [OutputCache(Duration = 120, VaryByParam = "id", VaryByContentEncoding = "gzip;deflate", VaryByCustom = "highDPI")]
         [Route("graph/network/spark"), AlsoAllow(Roles.InternalRequest)]
-        public ActionResult NetworkSpark(int id)
+        public async Task<ActionResult> NetworkSpark(string id)
         {
             var node = DashboardData.GetNodeById(id);
             if (node == null) return ContentNotFound();
 
             var chart = GetSparkChart();
-            var dataPoints = node.PrimaryInterfaces.SelectMany(
-                ni => ni.GetUtilization(start: DateTime.UtcNow.AddHours(-SparkHours),
-                                        end: null,
-                                        pointCount: (int) chart.Width.Value))
-                                 .OrderBy(dp => dp.DateTime);
+            var pointTasks = node.PrimaryInterfaces.Select(
+                ni => DashboardData.GetInterfaceUtilization(ni.Id,
+                    start: DateTime.UtcNow.AddHours(-SparkHours),
+                    end: null,
+                    pointCount: (int) chart.Width.Value));
+            var dataPoints = (await Task.WhenAll(pointTasks)).SelectMany(t => t).OrderBy(t => t.DateTime);
 
             var area = GetSparkChartArea();
             var series = GetSparkSeries("Total");
@@ -101,16 +102,14 @@ namespace StackExchange.Opserver.Controllers
 
         [OutputCache(Duration = 120, VaryByParam = "id", VaryByContentEncoding = "gzip;deflate", VaryByCustom = "highDPI")]
         [Route("graph/interface/{direction}/spark")]
-        public ActionResult InterfaceOutSpark(string direction, int id)
+        public async Task<ActionResult> InterfaceOutSpark(string direction, string id)
         {
-            var i = DashboardData.GetInterfaceById(id);
-            if (i == null) return ContentNotFound();
-
             var chart = GetSparkChart();
-            var dataPoints = i.GetUtilization(start: DateTime.UtcNow.AddHours(-SparkHours),
-                                              end: null,
-                                              pointCount: (int) chart.Width.Value)
-                              .OrderBy(dp => dp.DateTime);
+            var dataPoints = (await DashboardData.GetInterfaceUtilization(id,
+                start: DateTime.UtcNow.AddHours(-SparkHours),
+                end: null,
+                pointCount: (int) chart.Width.Value))
+                .OrderBy(dp => dp.DateTime);
 
             var area = GetSparkChartArea();
             var series = GetSparkSeries("Bytes");

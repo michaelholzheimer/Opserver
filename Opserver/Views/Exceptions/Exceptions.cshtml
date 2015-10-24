@@ -5,7 +5,6 @@
     var exceptions = Model.Errors;
     
     this.SetPageTitle(Model.Title);
-    this.SetMainTab(MainTab.Exceptions);
     this.SetTopSearch((log.HasValue() ? log + " " : "") + "Exceptions",
                       Model.Search,
                       "/exceptions/search",
@@ -19,10 +18,10 @@
 }
 @section head {
     <script>
-        $(function () { Status.Exceptions.init({ refresh: 120, log: '@log', enablePreviews: @(Current.Settings.Exceptions.EnablePreviews ? "true" : "false") }); });
+        $(function () { Status.Exceptions.init({ refresh: 120, log: '@log', sort: '@Model.Sort', loadMore: @(Model.LoadAsyncSize), enablePreviews: @(Current.Settings.Exceptions.EnablePreviews ? "true" : "false") }); });
     </script>
 }
-<div class="node-cagtegory-list top-section">
+<div class="node-category-list top-section">
     <ul class="top-server-list">
         <li>Exception Logs: </li>
         @{ var ac = Model.ShowAll ? @" class=""selected""" : ""; }
@@ -39,12 +38,8 @@
     <div class="bottom-section">
         @Html.Partial("Exceptions.Table", Model)
         <div class="no-content good@(exceptions.Any() ? " hidden" : "")">No @log exceptions</div>
-        @if (log.HasValue() && exceptions.Any(e => !e.IsProtected) && Current.User.IsExceptionAdmin)
-        {
-            <div class="clear-all-div">
-                <a class="delete-link clear-all-link" href="/exceptions/delete-all">&nbsp;X&nbsp;- Clear all non-protected errors</a>
-            </div>
-        }
+        <div class="loading-more-spacer loading hidden"></div>
+        <div class="no-content no-more hidden">End of active exception log</div>
     </div>
 }
 else

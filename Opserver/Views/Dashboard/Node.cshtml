@@ -7,7 +7,6 @@
     var currentStatusType = Model.CurrentStatusType;
     
     this.SetPageTitle((s != null ? s.PrettyName + " " : "") + "Status");
-    this.SetMainTab(MainTab.Dashboard);
     this.SetTopNodes(DashboardData.AllNodes, "Dashboard", Model.CurrentNode);
     var currentRange = Range.DefaultRanges.FirstOrDefault(r => r.Text == Request.QueryString["request"]) ?? Range.DefaultRanges.First();    
     var start = currentRange.Start.ToEpochTime(true);
@@ -30,7 +29,7 @@ else
     <div class="server-list" style="padding-top: 10px;">
         <div class="node-summary">
             <div class="server-name">
-                <span title="Status: @s.Status.GetDescription()@if(s.IsUnwatched && s.UnwatchedUntil > DateTime.UtcNow) {<text> until @s.UnwatchedUntil.ToUniversalTime()</text> }">@s.IconSpan()</span>
+                <span title="Status: @s.Status.GetDescription()@if(s.IsUnwatched && s.UnwatchedUntil > DateTime.UtcNow) {<text> until @s.UnwatchedUntil.ToZuluTime()</text> }">@s.IconSpan()</span>
                 <b>
                     @s.PrettyName
                     @if(s.IsVM)
@@ -58,7 +57,7 @@ else
                     </li>
                     <li title="@s.ApplicationCPUTextSummary()">
                         <span class="label">CPU:</span> 
-                        <span class="value"><span class="total-cpu-percent">@s.CPUStatusSpan()</span> @if (s.MachineType.Contains("Windows")) { <span class="other-link-wrap">(<a href="#" class="other-link realtime-cpu">realtime</a>)</span> }</span>
+                        <span class="value"><span class="total-cpu-percent">@s.CPUStatusSpan()</span> @if (s.IsRealTimePollable) { <span class="other-link-wrap">(<a href="#" class="other-link realtime-cpu">realtime</a>)</span> }</span>
                     </li>
                     <li title="@s.ApplicationMemoryTextSummary()">
                         <span class="label">Memory:</span> 
@@ -95,28 +94,34 @@ else
                         </li>
                     }
                     <li>
-                        <span class="label">Monitor IP:</span> 
+                        <span class="label">Monitor:</span> 
                         <span class="value"><span title="All IPs:
-@string.Join("\n",s.IPs)">@s.Ip</span></span>
+@if (s.IPs != null){string.Join("\n", s.IPs);}">@s.Ip</span></span>
                     </li>
                 </ul>
+                @if (s.Volumes != null)
+                {
                 <ul class="stats-right volume-list">
                     @foreach (var v in s.Volumes.Where(vol => vol.IsDisk && vol.Size > 0))
                     {
-                        <li title="@v.Description @string.Format("\n{0:n0}", v.Used) of @string.Format("{0:n0}", v.Size) bytes used">@v.PrettyDescription - (@v.PrettyUsed / @v.PrettySize) - <span class="@v.SpaceStatusClass">@v.FreeSpaceSpan()</span>
+                        <li title="@v.Description @($"\n{v.Used:n0}") of @($"{v.Size:n0}") bytes used">@v.PrettyDescription - (@v.PrettyUsed / @v.PrettySize) - <span class="@v.SpaceStatusClass">@v.FreeSpaceSpan()</span>
                             <div class="space-used"><div class="used @v.SpaceStatusClass" style="width: @(v.PercentUsed)%;"></div></div>
                         </li>
                     }
                 </ul>
+                }
             </div>
         </div>
     </div>
     <div class="tabs sub-tabs">
         <div class="tabs-links">
-            @foreach(var st in Model.StatusTypes.OrderBy(i => i))
+            @foreach (var st in Model.StatusTypes.OrderBy(i => i))
             {
                 switch (st)
                 {
+                    case CurrentStatusTypes.SQLInstance:
+                        <a class="@(currentStatusType == st ? " selected" : "") exit-link" href="/sql/instance?node=@s.PrettyName">@st.GetDescription()<span class="icon arrow up-right-small"></span></a>
+                        break;
                     case CurrentStatusTypes.SQLActive:
                         <a class="@(currentStatusType == st ? " selected" : "") exit-link" href="/sql/active?node=@s.PrettyName">@st.GetDescription()<span class="icon arrow up-right-small"></span></a>
                         break;

@@ -1,7 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using Dapper;
 
 namespace StackExchange.Opserver.Data.SQL
 {
@@ -17,24 +15,25 @@ namespace StackExchange.Opserver.Data.SQL
                     UpdateCache = UpdateFromSql("Error Log last " + minutesAgo + " minutes", conn =>
                         {
                             var sql = GetFetchSQL<SQLErrorLogInfo>();
-                            return conn.Query<SQLErrorLogInfo>(sql, new {minutesAgo}).ToList();
+                            return conn.QueryAsync<SQLErrorLogInfo>(sql, new {minutesAgo});
                         })
                 };
         }
 
         public class SQLErrorLogInfo : ISQLVersionedObject
         {
-            public Version MinVersion { get { return SQLServerVersions.SQL2005.RTM; } }
+            public Version MinVersion => SQLServerVersions.SQL2005.RTM;
 
             public DateTime LogDate { get; internal set; }
             public string ProcessInfo { get; internal set; }
             public string Text { get; internal set; }
 
             internal const string FetchSQL = @"
-Declare @Time_Start varchar(30) = DATEADD(mi, -@minutesAgo, GETUTCDATE());
+Declare @Time_Start varchar(30);
+Set @Time_Start = DATEADD(mi, -@minutesAgo, GETDATE());
 Declare @ErrorLog Table (LogDate datetime, ProcessInfo varchar(255), Text varchar(max));
 Insert Into @ErrorLog Exec master.dbo.xp_readerrorlog 0, 1, NULL, NULL, @Time_Start, NULL;
-Select * From @ErrorLog;";
+Select * From @ErrorLog Order By LogDate Desc;";
 
             public string GetFetchSQL(Version v)
             {

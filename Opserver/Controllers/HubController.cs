@@ -14,10 +14,9 @@ namespace StackExchange.Opserver.Controllers
 {
     public partial class HubController : StatusController
     {
-        protected override ISecurableSection SettingsSection
-        {
-            get { return Current.Settings.Dashboard; }
-        }
+        protected override ISecurableSection SettingsSection => Current.Settings.Dashboard;
+
+        protected override string TopTab => TopTabs.BuiltIn.Dashboard;
 
         [Route("headsup"), AlsoAllow(Roles.InternalRequest)]
         public ActionResult HeadsUp()
@@ -26,10 +25,8 @@ namespace StackExchange.Opserver.Controllers
         }
 
         [Route("hub"), Route("headsup"), AlsoAllow(Roles.InternalRequest)]
-        public ActionResult Index(bool ajax = false)
+        public ActionResult Index()
         {
-            SetMainTab(MainTab.Dashboard);
-
             var items = new List<IMonitorStatus>();
 
             var nodes = DashboardData.AllNodes

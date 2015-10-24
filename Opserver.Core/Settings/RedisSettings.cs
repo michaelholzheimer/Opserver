@@ -1,18 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Linq;
 
 namespace StackExchange.Opserver
 {
-    public class RedisSettings : Settings<RedisSettings>, IAfterLoadActions
+    public class RedisSettings : Settings<RedisSettings>
     {
-        public override bool Enabled { get { return Servers.Any(); } }
+        public override bool Enabled => Servers.Any();
 
-        public ObservableCollection<Server> Servers { get; set; }
-        public event EventHandler<Server> ServerAdded = delegate { };
-        public event EventHandler<List<Server>> ServersChanged = delegate { };
-        public event EventHandler<Server> ServerRemoved = delegate { };
+        public List<Server> Servers { get; set; }
 
         private Server _allServers;
         public Server AllServers
@@ -25,16 +21,14 @@ namespace StackExchange.Opserver
             }
         }
         public event EventHandler<Server> AllServersChanged = delegate { };
+        
+        public Server Defaults { get; set; }
 
         public RedisSettings()
         {
-            Servers = new ObservableCollection<Server>();
+            Servers = new List<Server>();
             AllServers = new Server();
-        }
-
-        public void AfterLoad()
-        {
-            Servers.AddHandlers(this, ServerAdded, ServersChanged, ServerRemoved);
+            Defaults = new Server();
         }
 
         public class Server : ISettingsCollectionItem<Server>
@@ -88,8 +82,8 @@ namespace StackExchange.Opserver
                     int hashCode = 0;
                     foreach (var i in Instances)
                         hashCode = (hashCode*397) ^ i.GetHashCode();
-                    hashCode = (hashCode*397) ^ (Name != null ? Name.GetHashCode() : 0);
-                    hashCode = (hashCode*397) ^ (Description != null ? Description.GetHashCode() : 0);
+                    hashCode = (hashCode*397) ^ (Name?.GetHashCode() ?? 0);
+                    hashCode = (hashCode*397) ^ (Description?.GetHashCode() ?? 0);
                     hashCode = (hashCode*397) ^ RefreshIntervalSeconds;
                     return hashCode;
                 }
@@ -102,6 +96,7 @@ namespace StackExchange.Opserver
             {
                 // Defaults
                 Port = 6379;
+                AnalysisRegexes = new Dictionary<string, string>();
             }
 
             /// <summary>
@@ -110,9 +105,14 @@ namespace StackExchange.Opserver
             public string Name { get; set; }
 
             /// <summary>
-            /// Connection por for this node
+            /// Connection for for this node
             /// </summary>
             public int Port { get; set; }
+
+            /// <summary>
+            /// The password for this node
+            /// </summary>
+            public string Password { get; set; }
 
             /// <summary>
             /// Regular expressions collection to crawl keys against, to break out Redis DB usage
@@ -140,7 +140,7 @@ namespace StackExchange.Opserver
                 unchecked
                 {
                     // TODO: Regexes should move
-                    int hashCode = (Name != null ? Name.GetHashCode() : 0);
+                    int hashCode = Name?.GetHashCode() ?? 0;
                     hashCode = (hashCode*397) ^ Port;
                     return hashCode;
                 }

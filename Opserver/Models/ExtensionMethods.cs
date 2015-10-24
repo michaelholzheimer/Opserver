@@ -30,6 +30,8 @@ namespace StackExchange.Opserver.Models
             if (options.MinExecs.HasValue) sb.Append("MinExecs=").Append(options.MinExecs).Append("&");
             if (options.MinExecsPerMin.HasValue) sb.Append("MinExecsPerMin=").Append(options.MinExecsPerMin).Append("&");
             if (options.Search.HasValue()) sb.Append("Search=").Append(HttpUtility.UrlEncode(options.Search)).Append("&");
+            if (options.Database.HasValue) sb.Append("Database=").Append(options.Database.Value).Append("&");
+            if (options.LastRunSeconds.HasValue) sb.Append("LastRunSeconds=").Append(options.LastRunSeconds.Value).Append("&");
 
             if (sb.Length > 0)
             {
@@ -55,7 +57,7 @@ namespace StackExchange.Opserver.Models
         public static IHtmlString PrettyPercentUtilization(this Interface i)
         {
             if (!i.InPercentUtil.HasValue || !i.OutPercentUtil.HasValue) return "n/a".AsHtml();
-            return string.Format(@"{0}% <span class=""note"">In - </span>{1}% <span class=""note"">Out</span>", i.InPercentUtil, i.OutPercentUtil).AsHtml();
+            return $@"{i.InPercentUtil}% <span class=""note"">In - </span>{i.OutPercentUtil}% <span class=""note"">Out</span>".AsHtml();
         }
 
         public static IHtmlString PrettyIn(this Interface i)
@@ -163,11 +165,10 @@ namespace StackExchange.Opserver.Models
 
         public static IHtmlString ApplicationCPUTextSummary(this Node info)
         {
-            var apps = info.Apps.ToList();
-            if (!apps.Any()) return MvcHtmlString.Empty;
+            if (info.Apps?.Any() != true) return MvcHtmlString.Empty;
 
             var sb = new StringBuilder();
-            sb.AppendFormat("Total App Pool CPU: {0} %\n", apps.Sum(a => a.PercentCPU.GetValueOrDefault(0)));
+            sb.AppendFormat("Total App Pool CPU: {0} %\n", info.Apps.Sum(a => a.PercentCPU.GetValueOrDefault(0)));
             sb.AppendLine("App Pools:");
             info.Apps.OrderBy(a => a.NiceName)
                 .ForEach(a => sb.AppendFormat("  {0}: {1} %\n", a.NiceName, a.PercentCPU));
@@ -176,11 +177,10 @@ namespace StackExchange.Opserver.Models
 
         public static IHtmlString ApplicationMemoryTextSummary(this Node info)
         {
-            var apps = info.Apps.ToList();
-            if (!apps.Any()) return MvcHtmlString.Empty;
+            if (info.Apps?.Any() != true) return MvcHtmlString.Empty;
 
             var sb = new StringBuilder();
-            sb.AppendFormat("Total App Pool Memory: {0}\n", apps.Sum(a => a.MemoryUsed.GetValueOrDefault(0)).ToSize());
+            sb.AppendFormat("Total App Pool Memory: {0}\n", info.Apps.Sum(a => a.MemoryUsed.GetValueOrDefault(0)).ToSize());
             sb.AppendLine("App Pools:");
             info.Apps.OrderBy(a => a.NiceName)
                 .ForEach(a => sb.AppendFormat("  {0}: {1}\n", a.NiceName, a.MemoryUsed.GetValueOrDefault(0).ToSize()));
@@ -201,6 +201,8 @@ namespace StackExchange.Opserver.Models
         //XNamespace ns = "http://schemas.microsoft.com/sqlserver/2004/07/showplan";
         public static IHtmlString QueryPlanHtml(this SQLInstance.TopOperation op)
         {
+            if (op.QueryPlan == null) return null;
+
             using(var sr = new StringReader(op.QueryPlan))
             using (var xmlr = XmlReader.Create(sr))
             {

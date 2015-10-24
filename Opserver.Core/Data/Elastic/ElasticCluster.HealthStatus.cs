@@ -1,17 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using Nest;
+using StackExchange.Elastic;
 
 namespace StackExchange.Opserver.Data.Elastic
 {
     public partial class ElasticCluster
     {
         private Cache<ClusterHealthStatusInfo> _healthStatus;
-        public Cache<ClusterHealthStatusInfo> HealthStatus
-        {
-            get { return _healthStatus ?? (_healthStatus = GetCache<ClusterHealthStatusInfo>(10)); }
-        }
+        public Cache<ClusterHealthStatusInfo> HealthStatus => _healthStatus ?? (_healthStatus = GetCache<ClusterHealthStatusInfo>(10));
 
         /// <summary>
         /// The Index info API changes in ElasticSearch 0.9, it's not really reasonable to support 
@@ -23,7 +20,7 @@ namespace StackExchange.Opserver.Data.Elastic
         {
             get
             {
-                return HealthStatus.Data != null && HealthStatus.Data.Indices != null
+                return HealthStatus.Data?.Indices != null
                            ? HealthStatus.Data.Indices.Where(i => i.MonitorStatus != MonitorStatus.Good).OrderByWorst()
                            : Enumerable.Empty<NodeIndexInfo>();
             }
@@ -60,13 +57,14 @@ namespace StackExchange.Opserver.Data.Elastic
                     }
                 }
             }
-            public string MonitorStatusReason { get { return "Cluster is " + StringStatus; } }
+            public string MonitorStatusReason => "Cluster is " + StringStatus;
 
-            public override IResponse RefreshFromConnection(ElasticClient cli)
+            public override ElasticResponse RefreshFromConnection(SearchClient cli)
             {
-                var health = cli.Health(HealthLevel.Shards);
-                if (health.IsValid)
+                var rawHealth = cli.GetClusterHealth();
+                if (rawHealth.HasData)
                 {
+                    var health = rawHealth.Data;
                     Name = health.ClusterName;
                     TotalNodeCount = health.NumberOfNodes;
                     DataNodeCount = health.NumberOfDataNodes;
@@ -98,9 +96,17 @@ namespace StackExchange.Opserver.Data.Elastic
                             RelocatingShards = s.Value.RelocatingShards,
                             UnassignedShards = s.Value.UnassignedShards
                         }).ToList()
-                    }).OrderBy(i => { int j; return int.TryParse(i.Name, out j) ? j : 0; }).ToList();
+                    }).OrderBy(i =>
+                    {
+                        int j;
+                        return int.TryParse(i.Name, out j) ? j : 0;
+                    }).ToList();
                 }
-                return health;
+                else
+                {
+                    Indices = new List<NodeIndexInfo>();
+                }
+                return rawHealth;
             }
         }
 
@@ -135,10 +141,7 @@ namespace StackExchange.Opserver.Data.Elastic
                     }
                 }
             }
-            public string MonitorStatusReason
-            {
-                get { return StringStatus != "green" ? "Index is " + StringStatus : null; }
-            }
+            public string MonitorStatusReason => StringStatus != "green" ? "Index is " + StringStatus : null;
         }
 
         public class NodeIndexShardInfo

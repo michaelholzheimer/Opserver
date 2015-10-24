@@ -4,7 +4,6 @@ using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Xml.Serialization;
-using Dapper;
 using StackExchange.Opserver.Data.SQL.QueryPlans;
 
 namespace StackExchange.Opserver.Data.SQL
@@ -14,14 +13,14 @@ namespace StackExchange.Opserver.Data.SQL
         public Cache<List<ActiveOperation>> GetActiveOperations(ActiveSearchOptions options)
         {
             if (options == null)
-                throw new ArgumentNullException("options", "Active Operations requires options");
+                throw new ArgumentNullException(nameof(options), "Active Operations requires options");
 
             return new Cache<List<ActiveOperation>>
                 {
                     CacheKey = GetCacheKey("ActiveOperations-" + options.GetHashCode()),
                     CacheForSeconds = 5,
                     CacheStaleForSeconds = 5*60,
-                    UpdateCache = UpdateFromSql("ActiveOperations", conn => conn.Query<WhoIsActiveRow>(options.ToSQLQuery(), options)
+                    UpdateCache = UpdateFromSql("ActiveOperations", async conn => (await conn.QueryAsync<WhoIsActiveRow>(options.ToSQLQuery(), options, commandTimeout: 300))
                                                                                 .Select(row => new ActiveOperation(row))
                                                                                 .ToList())
                 };
@@ -67,7 +66,7 @@ namespace StackExchange.Opserver.Data.SQL
 
         public class ActiveOperation
         {
-            public TimeSpan Duration { get { return CollectionTime - StartTime; } }
+            public TimeSpan Duration => CollectionTime - StartTime;
             public Int16 SessionId { get; internal set; }
 
             private string _sqlText;
@@ -242,11 +241,9 @@ Exec sp_WhoIsActive @format_output = 0;
             /// </summary>
             public bool WildcardSearch { get; set; }
 
-            public string FilterFieldString { get { return FilterField.ToString().ToLower(); } }
-            public string FilterValueString
-            {
-                get { return FilterValue.HasValue() ? string.Format("{0}{1}{0}", WildcardSearch ? "%" : "", FilterValue) : ""; }
-            }
+            public string FilterFieldString => FilterField.ToString().ToLower();
+            
+            public string FilterValueString => FilterValue.HasValue() ? string.Format("{0}{1}{0}", WildcardSearch ? "%" : "", FilterValue) : "";
 
             //TODO: Sort Order
             

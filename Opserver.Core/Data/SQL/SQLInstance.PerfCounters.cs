@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using Dapper;
 
 namespace StackExchange.Opserver.Data.SQL
 {
@@ -18,7 +17,7 @@ namespace StackExchange.Opserver.Data.SQL
                         UpdateCache = UpdateFromSql("PerfCounters", conn =>
                             {
                                 var sql = GetFetchSQL<PerfCounterRecord>();
-                                return conn.Query<PerfCounterRecord>(sql, new {maxEvents = 60}).ToList();
+                                return conn.QueryAsync<PerfCounterRecord>(sql, new {maxEvents = 60});
                             })
                     });
             }
@@ -27,14 +26,13 @@ namespace StackExchange.Opserver.Data.SQL
         public PerfCounterRecord GetPerfCounter(string category, string name, string instance)
         {
             var counters = PerfCounters.SafeData();
-            return counters != null
-                       ? counters.FirstOrDefault(c => c.ObjectName == category && c.CounterName == name && c.InstanceName == instance)
-                       : null;
+            var objectName = ObjectName + ":" + category;
+            return counters?.FirstOrDefault(c => c.ObjectName == objectName && c.CounterName == name && c.InstanceName == instance);
         }
 
         public class PerfCounterRecord : ISQLVersionedObject
         {
-            public Version MinVersion { get { return SQLServerVersions.SQL2000.RTM; } }
+            public Version MinVersion => SQLServerVersions.SQL2000.RTM;
 
             public string ObjectName { get; internal set; }
             public string CounterName { get; internal set; }
@@ -55,6 +53,7 @@ Insert Into @PCounters
 Select RTrim(spi.object_name) object_name, RTrim(spi.counter_name) counter_name, RTrim(spi.instance_name) instance_name, spi.cntr_value, spi.cntr_type
   From sys.dm_os_performance_counters spi
  Where spi.instance_name Not In (Select name From sys.databases)
+   And spi.object_name Not Like 'SQLServer:Backup Device%'
 
 WAITFOR DELAY '00:00:01'
 
@@ -69,6 +68,7 @@ Insert Into @CCounters
 Select RTrim(spi.object_name) object_name, RTrim(spi.counter_name) counter_name, RTrim(spi.instance_name) instance_name, spi.cntr_value, spi.cntr_type
   From sys.dm_os_performance_counters spi
  Where spi.instance_name Not In (Select name From sys.databases)
+   And spi.object_name Not Like 'SQLServer:Backup Device%'
 
 Select cc.object_name ObjectName,
        cc.counter_name CounterName,

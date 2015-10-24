@@ -1,5 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="..\packages\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.1.0.0\build\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.props" Condition="Exists('..\packages\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.1.0.0\build\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.props')" />
+  <Import Project="..\packages\Microsoft.Net.Compilers.1.0.0\build\Microsoft.Net.Compilers.props" Condition="Exists('..\packages\Microsoft.Net.Compilers.1.0.0\build\Microsoft.Net.Compilers.props')" />
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
@@ -8,7 +10,7 @@
     </ProductVersion>
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>{8C08655F-88F7-4C4E-B30F-CC8F0CE7AD19}</ProjectGuid>
-    <ProjectTypeGuids>{E53F8FEA-EAE0-44A6-8774-FFD645390401};{349c5851-65df-11da-9384-00065b846f21};{fae04ec0-301f-11d3-bf4b-00c04f79efbc}</ProjectTypeGuids>
+    <ProjectTypeGuids>{349c5851-65df-11da-9384-00065b846f21};{fae04ec0-301f-11d3-bf4b-00c04f79efbc}</ProjectTypeGuids>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>StackExchange.Opserver</RootNamespace>
@@ -26,6 +28,9 @@
     <IISExpressAnonymousAuthentication />
     <IISExpressWindowsAuthentication />
     <IISExpressUseClassicPipelineMode />
+    <MvcProjectUpgradeChecked>true</MvcProjectUpgradeChecked>
+    <NuGetPackageImportStamp>
+    </NuGetPackageImportStamp>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -47,48 +52,66 @@
     <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="Antlr3.Runtime, Version=3.3.1.7705, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+    <Reference Include="Antlr3.Runtime, Version=3.5.0.2, Culture=neutral, PublicKeyToken=eb42632606e9261f, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\packages\WebGrease.1.3.0\lib\Antlr3.Runtime.dll</HintPath>
+      <HintPath>..\packages\Antlr.3.5.0.2\lib\Antlr3.Runtime.dll</HintPath>
     </Reference>
-    <Reference Include="BookSleeve, Version=1.3.38.0, Culture=neutral, PublicKeyToken=9056fda458ff61cf, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\packages\BookSleeve.1.3.38\lib\BookSleeve.dll</HintPath>
+    <Reference Include="EasyHttp, Version=1.6.75.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\EasyHttp.1.6.75.0\lib\net40\EasyHttp.dll</HintPath>
+      <Private>True</Private>
     </Reference>
-    <Reference Include="EasyHttp, Version=1.6.52.0, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\packages\EasyHttp.1.6.52.0\lib\net40\EasyHttp.dll</HintPath>
+    <Reference Include="Jil, Version=2.10.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\Jil.2.10.0\lib\net45\Jil.dll</HintPath>
+      <Private>True</Private>
     </Reference>
     <Reference Include="JsonFx, Version=2.0.1209.2802, Culture=neutral, PublicKeyToken=315052dd637f8a52, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\packages\JsonFx.2.0.1209.2802\lib\net40\JsonFx.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.CodeDom.Providers.DotNetCompilerPlatform, Version=1.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+      <HintPath>..\packages\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.1.0.0\lib\net45\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.dll</HintPath>
+      <Private>True</Private>
     </Reference>
     <Reference Include="Microsoft.Web.Infrastructure, Version=1.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
       <Private>True</Private>
       <HintPath>..\packages\Microsoft.Web.Infrastructure.1.0.0.0\lib\net40\Microsoft.Web.Infrastructure.dll</HintPath>
     </Reference>
     <Reference Include="Microsoft.CSharp" />
-    <Reference Include="MiniProfiler, Version=3.0.4.0, Culture=neutral, PublicKeyToken=b44f9351044011a3, processorArchitecture=MSIL">
+    <Reference Include="MiniProfiler, Version=3.1.1.140, Culture=neutral, PublicKeyToken=b44f9351044011a3, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\packages\MiniProfiler.Mvc4.3.0.4\lib\net40\MiniProfiler.dll</HintPath>
+      <HintPath>..\packages\MiniProfiler.3.1.1.140\lib\net40\MiniProfiler.dll</HintPath>
     </Reference>
-    <Reference Include="MiniProfiler.Mvc">
-      <HintPath>..\packages\MiniProfiler.Mvc4.3.0.4\lib\net40\MiniProfiler.Mvc.dll</HintPath>
-    </Reference>
-    <Reference Include="Newtonsoft.Json, Version=4.5.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
+    <Reference Include="MiniProfiler.Mvc, Version=3.0.11.0, Culture=neutral, PublicKeyToken=b44f9351044011a3, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\packages\Newtonsoft.Json.4.5.11\lib\net40\Newtonsoft.Json.dll</HintPath>
+      <HintPath>..\packages\MiniProfiler.MVC4.3.0.11\lib\net40\MiniProfiler.Mvc.dll</HintPath>
     </Reference>
-    <Reference Include="SnmpSharpNet, Version=0.9.3.0, Culture=neutral, PublicKeyToken=b2181aa3b9571feb, processorArchitecture=MSIL">
+    <Reference Include="Newtonsoft.Json, Version=6.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\packages\SnmpSharpNet.0.9.3\lib\SnmpSharpNet.dll</HintPath>
+      <HintPath>..\packages\Newtonsoft.Json.6.0.8\lib\net45\Newtonsoft.Json.dll</HintPath>
     </Reference>
-    <Reference Include="StackExchange.Exceptional, Version=1.0.0.78, Culture=neutral, processorArchitecture=MSIL">
+    <Reference Include="Sigil, Version=4.4.0.0, Culture=neutral, PublicKeyToken=2d06c3494341c8ab, processorArchitecture=MSIL">
+      <HintPath>..\packages\Sigil.4.4.0\lib\net45\Sigil.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="SnmpSharpNet, Version=0.9.4.0, Culture=neutral, PublicKeyToken=b2181aa3b9571feb, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\packages\StackExchange.Exceptional.1.0.78\lib\StackExchange.Exceptional.dll</HintPath>
+      <HintPath>..\packages\SnmpSharpNet.0.9.4\lib\SnmpSharpNet.dll</HintPath>
     </Reference>
-    <Reference Include="Svg">
-      <HintPath>lib\Svg.dll</HintPath>
+    <Reference Include="StackExchange.Elastic, Version=0.1.25.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\Lib\StackExchange.Elastic.dll</HintPath>
+    </Reference>
+    <Reference Include="StackExchange.Exceptional, Version=1.0.0.111, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\packages\StackExchange.Exceptional.1.0.111\lib\StackExchange.Exceptional.dll</HintPath>
+    </Reference>
+    <Reference Include="StackExchange.Redis, Version=1.0.316.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\StackExchange.Redis.1.0.481\lib\net45\StackExchange.Redis.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="Svg, Version=0.5.2.17984, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\Lib\Svg.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Data" />
@@ -96,51 +119,64 @@
     <Reference Include="System.DirectoryServices.AccountManagement" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Management" />
+    <Reference Include="System.Runtime.Serialization" />
     <Reference Include="System.Web.DataVisualization" />
     <Reference Include="System.Web.Extensions" />
-    <Reference Include="System.Web.Helpers, Version=2.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+    <Reference Include="System.Web.Helpers, Version=3.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+      <HintPath>..\packages\Microsoft.AspNet.WebPages.3.2.3\lib\net45\System.Web.Helpers.dll</HintPath>
       <Private>True</Private>
-      <HintPath>..\packages\Microsoft.AspNet.WebPages.2.0.30506.0\lib\net40\System.Web.Helpers.dll</HintPath>
     </Reference>
-    <Reference Include="System.Web.Mvc, Version=4.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+    <Reference Include="System.Web.Mvc, Version=5.2.3.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+      <HintPath>..\packages\Microsoft.AspNet.Mvc.5.2.3\lib\net45\System.Web.Mvc.dll</HintPath>
       <Private>True</Private>
-      <HintPath>..\packages\Microsoft.AspNet.Mvc.4.0.30506.0\lib\net40\System.Web.Mvc.dll</HintPath>
     </Reference>
     <Reference Include="System.Web.Optimization, Version=1.1.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\packages\Microsoft.AspNet.Web.Optimization.1.1.0\lib\net40\System.Web.Optimization.dll</HintPath>
-    </Reference>
-    <Reference Include="System.Web.Razor, Version=2.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
-      <Private>True</Private>
-      <HintPath>..\packages\Microsoft.AspNet.Razor.2.0.30506.0\lib\net40\System.Web.Razor.dll</HintPath>
-    </Reference>
-    <Reference Include="System.Web.WebPages, Version=2.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
-      <Private>True</Private>
-      <HintPath>..\packages\Microsoft.AspNet.WebPages.2.0.30506.0\lib\net40\System.Web.WebPages.dll</HintPath>
-    </Reference>
-    <Reference Include="System.Web.WebPages.Deployment, Version=2.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
-      <Private>True</Private>
-      <HintPath>..\packages\Microsoft.AspNet.WebPages.2.0.30506.0\lib\net40\System.Web.WebPages.Deployment.dll</HintPath>
+      <HintPath>..\packages\Microsoft.AspNet.Web.Optimization.1.1.3\lib\net40\System.Web.Optimization.dll</HintPath>
     </Reference>
     <Reference Include="System.Web" />
     <Reference Include="System.Web.Abstractions" />
-    <Reference Include="System.Web.Routing" />
-    <Reference Include="System.Web.WebPages.Razor, Version=2.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+    <Reference Include="System.Web.Razor, Version=3.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+      <HintPath>..\packages\Microsoft.AspNet.Razor.3.2.3\lib\net45\System.Web.Razor.dll</HintPath>
       <Private>True</Private>
-      <HintPath>..\packages\Microsoft.AspNet.WebPages.2.0.30506.0\lib\net40\System.Web.WebPages.Razor.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Web.Routing" />
+    <Reference Include="System.Web.WebPages, Version=3.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+      <HintPath>..\packages\Microsoft.AspNet.WebPages.3.2.3\lib\net45\System.Web.WebPages.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Web.WebPages.Deployment, Version=3.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+      <HintPath>..\packages\Microsoft.AspNet.WebPages.3.2.3\lib\net45\System.Web.WebPages.Deployment.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Web.WebPages.Razor, Version=3.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+      <HintPath>..\packages\Microsoft.AspNet.WebPages.3.2.3\lib\net45\System.Web.WebPages.Razor.dll</HintPath>
+      <Private>True</Private>
     </Reference>
     <Reference Include="System.Xml" />
     <Reference Include="System.Configuration" />
     <Reference Include="TeamCitySharp, Version=0.3.3.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\packages\TeamCitySharp.0.3.3\lib\net40\TeamCitySharp.dll</HintPath>
+      <HintPath>..\packages\TeamCitySharp.0.3.5\lib\net40\TeamCitySharp.dll</HintPath>
     </Reference>
-    <Reference Include="WebGrease, Version=1.3.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+    <Reference Include="WebGrease, Version=1.6.5135.21930, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\packages\WebGrease.1.3.0\lib\WebGrease.dll</HintPath>
+      <HintPath>..\packages\WebGrease.1.6.0\lib\WebGrease.dll</HintPath>
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Views\SQL\Instance.Model.cs">
+      <DependentUpon>Instance.cshtml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\SQL\Operations.Active.Model.cs">
+      <DependentUpon>Operations.Active.cshtml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\SQL\Operations.Top.Model.cs">
+      <DependentUpon>Operations.Top.cshtml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\SQL\Servers.Model.cs">
+      <DependentUpon>Servers.cshtml</DependentUpon>
+    </Compile>
     <Content Include="Config\Readme.txt" />
     <Content Include="Content\Common.css">
       <DependentUpon>Common.less</DependentUpon>
@@ -148,9 +184,40 @@
     <Content Include="Content\Common.min.css">
       <DependentUpon>Common.less</DependentUpon>
     </Content>
-    <Content Include="Content\img\arrow-045-small.png" />
-    <Content Include="Content\img\arrow-circle-225.png" />
-    <Content Include="Content\img\logo-text.png" />
+    <Content Include="Content\img\arrow-small.png" />
+    <Content Include="Content\img\database\blue.png" />
+    <Content Include="Content\img\database\grey.png" />
+    <Content Include="Content\img\database\red.png" />
+    <Content Include="Content\img\database\yellow.png" />
+    <Content Include="Content\img\lock-off.png" />
+    <Content Include="Content\img\lock-on.png" />
+    <Content Include="Content\img\logo\icon-128.png" />
+    <Content Include="Content\img\logo\icon-152.png" />
+    <Content Include="Content\img\logo\icon-16.png" />
+    <Content Include="Content\img\logo\icon-256.png" />
+    <Content Include="Content\img\logo\icon-316.png" />
+    <Content Include="Content\img\logo\icon-32.png" />
+    <Content Include="Content\img\logo\icon-64.png" />
+    <Content Include="Content\img\logo\icon-76.png" />
+    <Content Include="Content\img\logo\logo-big.png" />
+    <Content Include="Content\img\logo\logo-login%402x.png" />
+    <Content Include="Content\img\logo\logo-login.png" />
+    <Content Include="Content\img\logo\logo-text%402x.png" />
+    <Content Include="Content\img\logo\logo-text.png" />
+    <Content Include="Content\img\node\node-select-all.png" />
+    <Content Include="Content\img\node\node-select-child.png" />
+    <Content Include="Content\img\node\node-select-next.png" />
+    <Content Include="Content\img\node\node-select-previous.png" />
+    <Content Include="Content\img\node\node-select.png" />
+    <Content Include="Content\img\node\node.png" />
+    <Content Include="Content\img\refresh.png" />
+    <Content Include="Content\img\square-minus-disabled.png" />
+    <Content Include="Content\img\square-minus.png" />
+    <Content Include="Content\img\square-plus-disabled.png" />
+    <Content Include="Content\img\square-plus.png" />
+    <Content Include="Content\img\x.png" />
+    <Content Include="Content\js\plugins\colorbrewer.js" />
+    <Content Include="Content\js\plugins\visibility.js" />
     <Content Include="Content\_Styles.Exceptions.less">
       <DependentUpon>Styles.less</DependentUpon>
     </Content>
@@ -174,6 +241,13 @@
     <Content Include="Config\SecuritySettings.config.example" />
     <Content Include="Config\SQLSettings.json.example" />
     <Content Include="Config\TeamCitySettings.json.example" />
+    <Content Include="Content\img\logo\logo.eps" />
+    <Content Include="Content\Styles.css.map">
+      <DependentUpon>Styles.css</DependentUpon>
+    </Content>
+    <Content Include="Config\JiraSettings.json.example" />
+    <None Include="compilerconfig.json" />
+    <None Include="Config\PagerDutySettings.json.example" />
     <None Include="Content\_Styles.HeadsUp.less">
       <DependentUpon>Styles.less</DependentUpon>
     </None>
@@ -183,6 +257,7 @@
     <Content Include="Content\_Styles.Plugins.toastr.less">
       <DependentUpon>Styles.less</DependentUpon>
     </Content>
+    <Content Include="Content\_Styles.Plugins.additional.less" />
     <None Include="Content\_Styles.Plugins.prettify.less">
       <DependentUpon>Styles.less</DependentUpon>
     </None>
@@ -191,7 +266,13 @@
     <Compile Include="Controllers\AdminController.cs" />
     <Compile Include="Controllers\CacheController.cs" />
     <Compile Include="Controllers\DataController.cs" />
+    <Compile Include="Controllers\CloudFlareController.cs" />
     <Compile Include="Controllers\HubController.cs" />
+    <Compile Include="Controllers\PagerDutyController.cs" />
+    <Compile Include="Controllers\PollController.cs" />
+    <Compile Include="Controllers\RedisController.Admin.cs">
+      <DependentUpon>RedisController.cs</DependentUpon>
+    </Compile>
     <Compile Include="Controllers\RedisController.cs" />
     <Compile Include="Controllers\DashboardController.Polling.cs">
       <DependentUpon>DashboardController.cs</DependentUpon>
@@ -200,10 +281,20 @@
     <Compile Include="Controllers\SQLController.Admin.cs">
       <DependentUpon>SQLController.cs</DependentUpon>
     </Compile>
-    <Compile Include="Helpers\PerfCounters.cs" />
+    <Compile Include="Helpers\ProfiledModelBinder.cs" />
     <Compile Include="Models\ExtensionMethods.cs" />
+    <Compile Include="Models\TopTabs.cs" />
     <Compile Include="SecuritySettings.cs" />
     <Compile Include="SiteSettings.cs" />
+    <Compile Include="Views\CloudFlare\Dashboard.Model.cs">
+      <DependentUpon>Dashboard.cshtml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\CloudFlare\DNS.Model.cs">
+      <DependentUpon>DNS.cshtml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\CloudFlare\Railguns.Model.cs">
+      <DependentUpon>Railguns.cshtml</DependentUpon>
+    </Compile>
     <Compile Include="Views\Dashboard\CurrentStatusTypes.cs" />
     <Compile Include="Views\Dashboard\Ranges.cs" />
     <Compile Include="Views\Dashboard\Node.Model.cs">
@@ -214,6 +305,12 @@
     </Compile>
     <Compile Include="Views\Home\About.Model.cs" />
     <Compile Include="Views\Hub\HubModel.cs" />
+    <Compile Include="Views\PagerDuty\PagerDuty.Model.cs">
+      <DependentUpon>PagerDuty.cshtml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\PagerDuty\PagerDutyIncident.Model.cs">
+      <DependentUpon>PagerDuty.Incident.cshtml</DependentUpon>
+    </Compile>
     <Compile Include="Views\Redis\Dashboard.Model.cs">
       <DependentUpon>Dashboard.cshtml</DependentUpon>
     </Compile>
@@ -230,6 +327,28 @@
     <Compile Include="Views\SQL\Databases.Model.cs">
       <DependentUpon>Databases.cshtml</DependentUpon>
     </Compile>
+    <Compile Include="Controllers\PagerDutyController.Admin.cs">
+      <DependentUpon>PagerDutyController.cs</DependentUpon>
+    </Compile>
+    <None Include="Help\SQL\WaitStats.md" />
+    <Content Include="Views\CloudFlare\Railguns.cshtml" />
+    <Content Include="Views\CloudFlare\Dashboard.cshtml" />
+    <Content Include="Views\Exceptions\Exceptions.Table.Rows.cshtml" />
+    <Content Include="Views\Redis\Dashboard.RoleActions.cshtml" />
+    <Content Include="Views\Elastic\_ViewStart.cshtml" />
+    <Content Include="Views\Redis\_ViewStart.cshtml" />
+    <Content Include="Views\CloudFlare\_ViewStart.cshtml" />
+    <Content Include="Views\SQL\Databases.Modal.Tables.Columns.cshtml" />
+    <Content Include="Views\CloudFlare\DNS.cshtml" />
+    <Content Include="Views\SQL\Instance.DBFiles.cshtml" />
+    <Content Include="Views\PagerDuty\PagerDuty.cshtml" />
+    <Content Include="Views\PagerDuty\PagerDuty.Incident.cshtml" />
+    <Content Include="Views\PagerDuty\PagerDuty.EscFull.cshtml" />
+    <Content Include="Views\PagerDuty\PagerDuty.OnCallRow.cshtml" />
+    <Content Include="Views\Exceptions\Exceptions.Jira.cshtml" />
+    <Content Include="Views\SQL\Instance.Configuration.cshtml">
+      <DependentUpon>Instance.cshtml</DependentUpon>
+    </Content>
     <Compile Include="Views\SQL\Ops.Top.Detail.Model.cs">
       <DependentUpon>Operations.Top.Detail.cshtml</DependentUpon>
     </Compile>
@@ -283,13 +402,10 @@
       <DependentUpon>Global.asax</DependentUpon>
     </Compile>
     <Compile Include="Helpers\DataKeys.cs" />
-    <Compile Include="Helpers\FileSizeFormatProvider.cs" />
     <Compile Include="Helpers\HtmlUtilities.CacheBreaker.cs">
       <DependentUpon>HtmlUtilities.cs</DependentUpon>
     </Compile>
     <Compile Include="Helpers\HtmlUtilities.cs" />
-    <Compile Include="Helpers\MainTab.cs" />
-    <Compile Include="Helpers\RouteAttribute.cs" />
     <Compile Include="Helpers\Status.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Views\Exceptions\Exceptions.Model.cs">
@@ -305,18 +421,6 @@
       <DependentUpon>Login.cshtml</DependentUpon>
     </Compile>
     <EmbeddedResource Include="Content\img\loading.gif" />
-    <Content Include="Content\img\arrow-000-medium.png" />
-    <Content Include="Content\img\arrow-090-medium.png" />
-    <Content Include="Content\img\arrow-180-medium.png" />
-    <Content Include="Content\img\arrow-270-medium.png" />
-    <Content Include="Content\img\database--exclamation.png" />
-    <Content Include="Content\img\database--minus.png" />
-    <Content Include="Content\img\database-import.png" />
-    <Content Include="Content\img\database-medium.png" />
-    <Content Include="Content\img\databases.png" />
-    <Content Include="Content\img\Logo-32.png" />
-    <Content Include="Content\img\minus-button.png" />
-    <Content Include="Content\img\plus-button.png" />
     <Content Include="Content\img\query-plan\arithmetic_expression.gif" />
     <Content Include="Content\img\query-plan\assert.gif" />
     <Content Include="Content\img\query-plan\assign.gif" />
@@ -385,8 +489,6 @@
     <Content Include="Content\img\query-plan\top.gif" />
     <Content Include="Content\img\query-plan\udx.gif" />
     <Content Include="Content\img\query-plan\while.gif" />
-    <Content Include="Content\img\table-medium.png" />
-    <Content Include="Content\img\table-select-all.png" />
     <Content Include="Content\js\plugins\autocomplete.js" />
     <Content Include="Content\js\plugins\cookie.js" />
     <Content Include="Content\js\plugins\d3.v3.js" />
@@ -394,8 +496,6 @@
     <Content Include="Content\js\plugins\qp.js" />
     <Content Include="Content\js\plugins\simplemodal.js" />
     <Content Include="Content\js\plugins\tablesorter.js" />
-    <Content Include="Content\js\Scripts.StackOverflow.js" />
-    <Content Include="Content\Login.js" />
     <Content Include="Content\img\search-icon.png" />
     <Content Include="Content\img\apple-touch-icon.png" />
     <Content Include="Content\img\progress-dots.gif" />
@@ -403,7 +503,7 @@
       <DependentUpon>Styles.less</DependentUpon>
     </Content>
     <Content Include="Content\Styles.min.css">
-      <DependentUpon>Styles.less</DependentUpon>
+      <DependentUpon>Styles.css</DependentUpon>
     </Content>
     <Content Include="Content\transforms\qp.xslt">
       <SubType>Designer</SubType>
@@ -448,13 +548,13 @@
     <Content Include="Views\Home\Test.cshtml" />
     <Content Include="Views\Dashboard\Node.Current.Interfaces.cshtml" />
     <Content Include="Views\Elastic\Dashboard.cshtml" />
-    <Content Include="Views\Elastic\Dashboard.Cluster.cshtml" />
-    <Content Include="Views\Elastic\Dashboard.Cluster.Shards.cshtml" />
-    <Content Include="Views\Elastic\Dashboard.Cluster.Indices.cshtml" />
+    <Content Include="Views\Elastic\Cluster.cshtml" />
+    <Content Include="Views\Elastic\Cluster.Shards.cshtml" />
+    <Content Include="Views\Elastic\Cluster.Indices.cshtml" />
     <Content Include="Views\Hub\Index.cshtml" />
     <Content Include="Views\Dashboard\Node.Current.Stats.cshtml" />
     <Content Include="Views\Redis\Dashboard.cshtml" />
-    <Content Include="Views\Redis\Dashboard.All.cshtml" />
+    <Content Include="Views\Redis\AllServers.cshtml" />
     <Content Include="Views\Redis\Server.Info.cshtml" />
     <Content Include="Views\Redis\Server.Clients.cshtml" />
     <Content Include="Views\Redis\Server.Clients.ByIP.cshtml" />
@@ -509,29 +609,14 @@
     <Content Include="Views\Hub\HAProxy.Group.cshtml" />
     <Content Include="Views\Shared\TopRefresh.cshtml" />
     <Content Include="Views\Shared\NoConfiguration.cshtml" />
-    <None Include="Views\SQL\Servers.cshtml" />
+    <Content Include="Views\SQL\Servers.cshtml" />
+    <Content Include="Views\Redis\Instance.SlowLog.cshtml" />
+    <Content Include="Views\Redis\Instance.Config.cshtml" />
+    <Content Include="Views\SQL\_ViewStart.cshtml" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Content\img\ajax-loader.gif" />
-    <Content Include="Content\img\bg-hatchlines.png" />
-    <Content Include="Content\img\bg-site.png" />
-    <Content Include="Content\img\big-logo.png" />
-    <Content Include="Content\img\cross-small-circle.png" />
-    <Content Include="Content\img\cross-small.png" />
-    <Content Include="Content\img\lock-exclamation.png" />
-    <Content Include="Content\img\lock-small.png" />
-    <Content Include="Content\img\network-status-warning.png" />
-    <Content Include="Content\img\network-status-down.png" />
-    <Content Include="Content\img\network-status-unknown.png" />
-    <Content Include="Content\img\network-status-up.png" />
-    <Content Include="Content\img\se-gear.png" />
     <Content Include="Content\img\se-stats.png" />
-    <Content Include="Content\img\status-red-large.png" />
-    <Content Include="Content\img\status-red.png" />
-    <Content Include="Content\img\status-warning.png" />
-    <Content Include="Content\img\status-warning-large.png" />
-    <Content Include="Content\img\status-green.png" />
-    <Content Include="Content\img\status-green-large.png" />
     <Content Include="Content\Login.css" />
     <Content Include="Content\js\Scripts.js" />
     <Content Include="favicon.ico" />
@@ -553,12 +638,6 @@
     <Content Include="Views\Shared\PageNotFound.cshtml" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Opserver.Core\Opserver.Core.csproj">
-      <Project>{c58aff99-f4d9-4a83-866e-18da0a633f6b}</Project>
-      <Name>Opserver.Core</Name>
-    </ProjectReference>
-  </ItemGroup>
-  <ItemGroup>
     <Content Include="Views\Dashboard\Node.cshtml" />
   </ItemGroup>
   <ItemGroup>
@@ -574,6 +653,12 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="Views\Login\Login.cshtml" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Opserver.Core\Opserver.Core.csproj">
+      <Project>{c58aff99-f4d9-4a83-866e-18da0a633f6b}</Project>
+      <Name>Opserver.Core</Name>
+    </ProjectReference>
   </ItemGroup>
   <ItemGroup />
   <PropertyGroup>
@@ -595,18 +680,16 @@
     <VisualStudio>
       <FlavorProperties GUID="{349c5851-65df-11da-9384-00065b846f21}">
         <WebProjectProperties>
-          <UseIIS>False</UseIIS>
-          <AutoAssignPort>True</AutoAssignPort>
-          <DevelopmentServerPort>56259</DevelopmentServerPort>
-          <DevelopmentServerVPath>/</DevelopmentServerVPath>
-          <IISUrl>
-          </IISUrl>
-          <NTLMAuthentication>False</NTLMAuthentication>
-          <UseCustomServer>False</UseCustomServer>
-          <CustomServerUrl>http://local.status.se.com</CustomServerUrl>
-          <SaveServerSettingsInUserFile>False</SaveServerSettingsInUserFile>
+          <SaveServerSettingsInUserFile>True</SaveServerSettingsInUserFile>
         </WebProjectProperties>
       </FlavorProperties>
     </VisualStudio>
   </ProjectExtensions>
+  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
+    </PropertyGroup>
+    <Error Condition="!Exists('..\packages\Microsoft.Net.Compilers.1.0.0\build\Microsoft.Net.Compilers.props')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.Net.Compilers.1.0.0\build\Microsoft.Net.Compilers.props'))" />
+    <Error Condition="!Exists('..\packages\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.1.0.0\build\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.props')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.1.0.0\build\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.props'))" />
+  </Target>
 </Project>
